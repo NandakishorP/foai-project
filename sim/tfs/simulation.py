@@ -167,7 +167,7 @@ def run_market(
     traits: Sequence[ForecasterTraits],
     researchers: frozenset[int],
 ) -> MarketRecord:
-    tape = generate_tape(cfg, list(traits), rngs, market)
+    tape = generate_tape(cfg, rngs, market)
     agents = build_agents(cfg, rngs, market, traits, researchers)
     engine = FastEngine(
         {Venue.MAIN: cfg.market.b_main, Venue.REF: cfg.market.b_ref},
@@ -178,6 +178,7 @@ def run_market(
     ticks = cfg.market.ticks
     price_main, price_ref = np.empty(ticks), np.empty(ticks)
     pending_receipts: dict[str, list[Receipt]] = defaultdict(list)
+    own_private_llr = tape.own_private_llr  # what each forecaster can infer from its own research
     executed = reverted = 0
 
     for tick in range(ticks):
@@ -185,7 +186,7 @@ def run_market(
         balances = engine.balances()
         txs: list[Tx] = []
         for agent in agents:
-            private = 0.0 if agent.private_source is None else float(tape.private_llr[agent.private_source, tick])
+            private = 0.0 if agent.private_source is None else float(own_private_llr[agent.private_source, tick])
             agent.perceive(
                 Observation(
                     tick=tick,

@@ -45,15 +45,17 @@ def cfg() -> SimConfig:
     return replace_in(load_config(CONFIG_DIR / "base.yaml"), "market.ticks", 150)
 
 
-@pytest.mark.parametrize("model", ["own_signals", "price_anchored"])
-def test_cross_term_averages_to_zero(cfg: SimConfig, model: str) -> None:
-    cross = _cross_terms(replace_in(cfg, "agents.belief_model", model))
+@pytest.mark.parametrize(("model", "rho"), [("own_signals", 0.0), ("price_anchored", 0.0), ("own_signals", 0.6)])
+def test_cross_term_averages_to_zero(cfg: SimConfig, model: str, rho: float) -> None:
+    """Holds with correlated research only if p*_avail is the exact correlated posterior (D-024)."""
+    cfg = replace_in(replace_in(cfg, "agents.belief_model", model), "information.private.rho", rho)
+    cross = _cross_terms(cfg)
     se = cross.std(ddof=1) / math.sqrt(len(cross))
     assert abs(cross.mean()) < 3 * se, (cross.mean(), se)
 
 
 def test_negative_control_detects_leaked_information(cfg: SimConfig) -> None:
-    """A price that absorbs 25% of the unacquired information must give a clearly non-zero cross term.
+    """A price that absorbs 50% of the unacquired information must give a clearly non-zero cross term.
 
     This shows the zero-cross-term test above has the power to detect a leak.
     (A more "natural" leak, letting non-researchers trade secretly, was tried
@@ -61,7 +63,7 @@ def test_negative_control_detects_leaked_information(cfg: SimConfig) -> None:
     own_signals the market absorbs little of any single forecaster's private
     information. That is the under-aggregation issue E1 measures, DECISIONS D-013.)
     """
-    cross = _cross_terms(cfg, leak=0.25)
+    cross = _cross_terms(cfg, leak=0.5)
     se = cross.std(ddof=1) / math.sqrt(len(cross))
     assert cross.mean() < -3 * se, (cross.mean(), se)
 

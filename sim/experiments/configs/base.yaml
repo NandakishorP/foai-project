@@ -30,12 +30,12 @@ information:
   public:
     rate: 0.05        # ~10 public news items per market
     expected_nats: 2.0  # public news alone moves log-odds by ~2 in expectation (p ~ 0.88)
-  private:
-    rate: 0.05        # ~10 private signals per researching forecaster per market
-    nats_min: 0.1     # heterogeneous forecaster quality (SPEC §2.1); mean 0.2 nats each,
-    nats_max: 0.3     #   so 10 forecasters hold ~2 nats in total: as much as all public news.
+  private:            # research signals, correlated across forecasters (DECISIONS D-024)
+    rate: 0.05        # ~10 research events per market; each gives every forecaster a signal
+    pooled_nats: 2.0  # all forecasters' research together is worth ~2 nats: as much as all public news.
                       # Total with the shock is ~5 nats: p*_full ends near 0.99 but stays well
                       # inside (0,1) for most of the market, so accuracy metrics do not saturate.
+    rho: 0.0          # PLACEHOLDER until the baseline calibration (D-026) freezes it
   shocks:
     - tick: 100       # one true breaking-news event mid-market (Topic 6 shock; time-to-epsilon)
       nats: 1.0       # a single signal worth half of all routine public news

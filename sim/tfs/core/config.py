@@ -62,9 +62,9 @@ class PublicNewsConfig:
 
 @dataclass(frozen=True)
 class PrivateSignalConfig:
-    rate: float  # expected private signals per tick, per potential forecaster
-    nats_min: float  # per-forecaster expected private nats per market, drawn uniformly
-    nats_max: float
+    rate: float  # expected research events per tick; at each event every potential forecaster gets a signal
+    pooled_nats: float  # expected LLR per market of ALL forecasters' research combined (full participation)
+    rho: float  # correlation of two forecasters' signals given Y (0 = independent, 1 = one shared signal)
 
 
 @dataclass(frozen=True)
@@ -180,6 +180,8 @@ def _validate(cfg: SimConfig) -> None:
     for shock in cfg.information.shocks:
         if not 0 <= shock.tick < cfg.market.ticks:
             raise ConfigError(f"shock tick {shock.tick} is outside the market")
+    if not 0.0 <= cfg.information.private.rho <= 1.0:
+        raise ConfigError("information.private.rho must be in [0, 1]")
     if cfg.agents.trend.fast_span >= cfg.agents.trend.slow_span:
         raise ConfigError("agents.trend.fast_span must be shorter than slow_span")
 
