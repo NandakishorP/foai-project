@@ -128,6 +128,90 @@ Each term is reported as an RMS with 95% CIs; shares of truth lost are stated in
 
 ---
 
+## D-013 — Two belief models behind one switch
+**Date:** 2026-10-10 · **SPEC:** §6 · **Owner decision (Phase 1 planning)**
+
+**Decision.** `agents.belief_model` selects how informed agents (forecasters and public-news traders) combine signals with the price:
+- `own_signals` (SPEC default): log-odds = prior + every signal seen; the price is ignored.
+- `price_anchored`: log-odds = logit(price) + r, where r is the agent's information not yet in the price. r grows with each new signal and shrinks by the log-odds impact of the agent's own fills, never changing sign.
+
+Both run in E1. One is chosen by the pre-declared rule D-016, before any predator experiment.
+
+**Reason.** Under `own_signals`, Kelly traders push the price toward a wealth-weighted *average* of beliefs, not the pooled posterior `p*_avail` (which sums independent private LLRs). The market could then structurally fail to aggregate private information, muting H2 for a modelling reason. `price_anchored` pools information, but it treats noise-trader moves as information. E1 measures which matters more instead of assuming.
+
+---
+
+## D-014 — Non-researching forecasters sit the market out
+**Date:** 2026-10-10 · **SPEC:** §2.1 · **Owner decision**
+
+**Decision.** A forecaster that does not research in a market does not trade in it at all.
+
+**Reason.** It makes the research decision the participation decision: the clean Grossman–Stiglitz reading. Public news still reaches the main market via public-news traders (D-019) and arbitrage with the reference venue.
+
+---
+
+## D-015 — Fixed bankroll per market (changes SPEC §2.1 "carry wealth")
+**Date:** 2026-10-10 · **SPEC:** §2.1 · **Owner decision**
+
+**Decision.** Every forecaster bets from the same bankroll in every market. Profits and losses accumulate in a separate ledger (per-market PnL records). What carries across a season is the learned EMA estimate of research profit, not wealth.
+
+**Reason.** With compounding wealth, trading profit scales with wealth while research cost is fixed in dollars. Winners' research would grow more profitable over the season, so participation could drift upward even without predators. That would confound the "stable without predators" milestone and H2.
+
+---
+
+## D-016 — Belief-model selection rule for E1 (pre-declared)
+**Date:** 2026-10-10 · **Fixed in the approved Phase 1 plan before any simulation was run.**
+
+**Rule.** Run E1 under both belief models. Choose the model with the lower aggregation-loss RMS at the base configuration. If the two 95% CIs overlap, keep `own_signals` (the spec default). The chosen model is used for cost calibration, the season baseline, and all Phase 2 experiments. The full E1 sweep is reported for both models regardless.
+
+**Disclosure.** A 40-seed smoke run of the base config under both models was made while debugging the simulation loop (before E1). Its numbers do not enter any result.
+
+---
+
+## D-017 — Research-cost calibration rule (pre-declared)
+**Date:** 2026-10-10 · **Fixed in the approved Phase 1 plan before any simulation was run.**
+
+**Rule.** Run the base configuration with the chosen belief model, `research.mode: always`, a single market and 200 seeds, with no predators. Set `cost_median` to the median gross trading profit of a researching forecaster across all (forecaster, seed) pairs. Costs are lognormal around it (`cost_log_sigma` = 0.5). The value is written into the season configs with this rule cited, and is not changed afterwards to influence any result.
+
+**Reason.** Costs must sit where some forecasters find research worthwhile and some do not, so that movement in participation in either direction is visible. The rule fixes the scale before predators exist, so it cannot be tuned toward H2.
+
+---
+
+## D-018 — False news deferred
+**Date:** 2026-10-10
+
+**Decision.** Phase 1 implements only true shocks (high-precision public signals). False news waits for an answer to Q1, because a false-news process unknown to the ideal prices would break the MSE decomposition (D-001).
+
+---
+
+## D-019 — Public-news traders on both venues
+**Date:** 2026-10-10 · **SPEC:** §6
+
+**Decision.** One `PublicNewsTrader` per venue (configurable) trades on public news only, after a delay: 1 tick on the main market, 5 on the reference venue. It uses the same belief model as the forecasters.
+
+**Reason.** The reference venue must "receive public news with a delay" (D-005), so some agent has to trade it on that news. On the main market, under `price_anchored`, someone must carry public news into the price, since forecasters add only private information there. The same agents exist under both belief models, so E1 compares like with like.
+
+---
+
+## D-020 — Research decision details
+**Date:** 2026-10-10 · **SPEC:** §2.1
+
+**Decision.**
+- A forecaster with no research experience researches (optimistic initialisation). In a season's first market everyone researches, which is the fixed participation H1 assumes.
+- The EMA of gross trading profit updates only in markets where the forecaster researched.
+- ε-exploration only adds research: a forecaster whose rule says "no" researches anyway with probability ε. The exploration coin is drawn every market from its own stream, so decisions do not shift other random draws.
+
+---
+
+## D-021 — Execution rule for Kelly traders (Phase 1 "simple execution")
+**Date:** 2026-10-10 · **SPEC:** §6
+
+**Decision.** Informed agents send at most one order per tick and never make a trade with negative expected value under their own belief. They trade only in the direction belief − price points, up to the fractional-Kelly target exposure. Each order is capped so it cannot push the price past the belief (LMSR closed form), and its limit price equals the belief. Exposure is increased by selling the opposite side first, if held.
+
+**Reason.** Explainable, and it avoids churn: an agent never sells into a price it considers unfavourable. Under `price_anchored`, the same rule means the agent never unwinds a position merely because its information is now priced in. The limit at the belief matters in Phase 2: being front-run can at worst cancel an order, never fill it at a price the agent thinks is bad.
+
+---
+
 ## Open questions
 
 - **Q1 — False news vs the MSE decomposition (D-001).** SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

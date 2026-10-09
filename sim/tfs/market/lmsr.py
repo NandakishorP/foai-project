@@ -57,6 +57,17 @@ def trade_cost(q_yes: float, q_no: float, b: float, side: Side, shares: float) -
     return cost(q_yes, q_no + shares, b) - cost(q_yes, q_no, b)
 
 
+def cost_at_price(price: float, b: float, side: Side, shares: float) -> float:
+    """Cost of buying `shares` of `side` when the YES price is `price`, from the price alone.
+
+    C(q + x·e_yes) − C(q) = b·ln(p·e^{x/b} + 1 − p), and symmetrically for NO.
+    Traders know the public price and b but need not read q directly.
+    log1p/expm1 keep this accurate for small trades.
+    """
+    p_side = price if side is Side.YES else 1.0 - price
+    return b * math.log1p(p_side * math.expm1(shares / b))
+
+
 def yes_shares_to_move_price(p_from: float, p_to: float, b: float) -> float:
     """YES shares to buy (negative: NO shares to buy) that move the YES price from p_from to p_to.
 
