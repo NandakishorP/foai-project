@@ -1,0 +1,23 @@
+# E2b (SPEC §7; tests H2): the long run, research is a choice.
+#
+# The frozen season baseline (D-030: rho 1, capital 2 x b, cost median 1.716,
+# endogenous research) plus predators, whose beliefs persist across the season.
+# H2 is scored on markets 21-30 (PREREGISTRATION). Reference: one predator at the
+# frozen costs. The research-cost sweep (x0.5, x2) is reported alongside.
+
+extends: season_baseline.yaml
+name: e2b
+
+analysis:
+  hypothesis: H2
+  score_from_market: 20           # 0-based index: markets 21-30
+  pair_on: agents.predators.count
+  reference:
+    agents.predators.count: 1
+    agents.forecasters.research.cost_median: 1.716
+
+sweep:
+  crossed:
+    agents.predators.count: [0, 1, 2, 4]
+  one_at_a_time:
+    agents.forecasters.research.cost_median: [0.858, 1.716, 3.432]

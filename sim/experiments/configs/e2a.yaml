@@ -1,0 +1,29 @@
+# E2a (SPEC §7; tests H1): the short run, with research participation fixed.
+#
+# 30-market seasons with research FORCED ON (participation 100% with and without
+# predators), so only the predators differ between twins. Predator beliefs persist
+# across the season. H1 is scored on markets 6-30 after a 5-market warm-up
+# (PREREGISTRATION as amended by D-033; warm-up rationale in D-034).
+# Reference predator: base.yaml values (D-034) with count 1. Full sweep reported.
+
+extends: base.yaml
+name: e2a
+
+season:
+  n_markets: 30
+
+analysis:
+  hypothesis: H1
+  score_from_market: 5            # 0-based index: markets 6-30
+  pair_on: agents.predators.count # each predator point is paired with its 0-predator twin
+  reference:
+    agents.predators.count: 1
+    agents.predators.latency: 0.2
+    agents.predators.back_run: false
+
+sweep:
+  crossed:
+    agents.predators.count: [0, 1, 2, 4]
+  one_at_a_time:
+    agents.predators.latency: [0.05, 0.2, 0.5]
+    agents.predators.back_run: [false, true]
