@@ -34,7 +34,7 @@ from tfs.metrics.accuracy import brier_scores, decompose, time_to_epsilon
 from tfs.metrics.stats import mean_ci, rms_ci
 from tfs.simulation import MarketRecord, SeasonRecord, run_season
 
-AGENT_KINDS = ("forecaster", "public_news", "noise", "arbitrageur", "trend")
+AGENT_KINDS = ("forecaster", "public_news", "noise", "arbitrageur", "trend", "predator")
 MSE_METRICS = ("truth_mse", "aggregation_mse", "participation_mse")
 
 
@@ -72,6 +72,9 @@ def market_row(record: MarketRecord, season: SeasonRecord, epsilon: float) -> di
     row["research_cost"] = sum(c for c in costs if c is not None)
     row["mm_pnl_main"] = record.mm_pnl[Venue.MAIN]
     row["mm_pnl_ref"] = record.mm_pnl[Venue.REF]
+    row["builder_revenue"] = record.builder_revenue
+    row["frontruns"] = record.frontruns
+    row["victim_reverts"] = record.victim_reverts
     row["executed"] = record.executed
     row["reverted"] = record.reverted
     return row
@@ -195,6 +198,7 @@ class ExperimentResult:
     summary: list[dict[str, Any]]
     per_market: list[dict[str, Any]]
     results: list[list[RunResult]]
+    verdict: dict[str, Any] | None = None  # set when the config has an `analysis:` section
 
 
 def _git_state() -> dict[str, Any]:
@@ -223,6 +227,7 @@ def run_experiment(
     n_seeds: int | None = None,
 ) -> ExperimentResult:
     raw = load_raw(config_path)
+    analysis = raw.get("analysis")
     points = expand_sweep(raw)
     seeds_cfg = points[0].config.seeds
     count = n_seeds if n_seeds is not None else seeds_cfg.count
@@ -248,4 +253,9 @@ def run_experiment(
     (out_dir / "config.yaml").write_text(yaml.safe_dump(raw, sort_keys=False))
     meta = {"git": _git_state(), "seeds": [seeds[0], seeds[-1]], "n_points": len(points), "config": str(config_path)}
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=2))
-    return ExperimentResult(name, out_dir, points, summary, per_market, results)
+    verdict = None
+    if analysis is not None:
+        from tfs.experiments.verdicts import analyse  # imported here: verdicts imports this module
+
+        verdict = analyse(points, results, analysis, out_dir)
+    return ExperimentResult(name, out_dir, points, summary, per_market, results, verdict)

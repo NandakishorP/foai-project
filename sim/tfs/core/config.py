@@ -299,7 +299,8 @@ def load_raw(path: Path) -> dict[str, Any]:
     if parent is None:
         return data
     base = load_raw(path.parent / parent)
-    base.pop("sweep", None)  # a sweep belongs to the file that declares it, not its children
+    base.pop("sweep", None)  # a sweep (and its analysis) belongs to the file that declares it, not its children
+    base.pop("analysis", None)
     return deep_merge(base, data)
 
 
@@ -345,6 +346,7 @@ def expand_sweep(raw: dict[str, Any]) -> list[SweepPoint]:
     skipped as duplicates). With no `sweep:` key there is a single point.
     """
     raw = copy.deepcopy(raw)
+    raw.pop("analysis", None)  # paired-analysis settings, read by the runner, not part of SimConfig
     sweep = raw.pop("sweep", None) or {}
     unknown = set(sweep) - {"crossed", "one_at_a_time"}
     if unknown:
@@ -376,6 +378,7 @@ def load_config(path: Path) -> SimConfig:
     """Load a single (non-swept) configuration."""
     raw = load_raw(path)
     raw.pop("sweep", None)
+    raw.pop("analysis", None)
     return build(SimConfig, raw)
 
 
