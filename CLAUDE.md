@@ -12,6 +12,7 @@ An adversarial multi-agent simulation of an on-chain prediction market. Informed
 
 ## Scientific honesty (non-negotiable)
 - The project tests hypotheses H1–H3 (SPEC top). **Never tune parameters, seeds, or agent logic to make a hypothesis come out true.** If results contradict a hypothesis, report it.
+- Hypothesis verdict criteria are pre-registered in `docs/PREREGISTRATION.md` and committed before the experiment runs; never edit them after seeing results (log any change in `docs/DECISIONS.md`).
 - Parameter values come from configs with a stated rationale; when sweeping, report the whole sweep, not the best point.
 - The ZK defense's costs (SPEC §5.1) must always be measured and shown alongside its benefits.
 - Polymarket is used for calibration only; never claim Polymarket itself is front-run via a mempool (SPEC §8).

@@ -11,7 +11,7 @@ An adversarial multi-agent simulation of a **fully on-chain** prediction market.
 - **H2 (long run):** when forecasters choose each epoch whether research is worth its cost, predators shrink research participation, and truth lost rises sharply. (The Grossman–Stiglitz effect.)
 - **H3 (defense):** a ZK sealed batch auction restores research participation and accuracy, **at a measurable cost** in reaction speed to breaking news and execution delay.
 
-If the data contradicts a hypothesis, that is reported as a finding — the project must not be tuned to make the hypotheses true.
+If the data contradicts a hypothesis, that is reported as a finding — the project must not be tuned to make the hypotheses true. The numeric verdict criteria for each hypothesis are **pre-registered** in `docs/PREREGISTRATION.md` and committed before the experiment that tests it is run.
 
 Course context: AI course, multi-agent systems, **Topic 6 — Financial Market Simulation & Algorithmic Trading (Competitive Environments)**. The topic requires: competing trading agents, **arbitrage agents**, **trend-following agents**, a **sudden shock event**, and an evaluation of **market stability**. It connects to adversarial search (minimax / alpha-beta) and utility-based decision making. Every requirement must be visibly satisfied.
 
@@ -21,7 +21,7 @@ Course context: AI course, multi-agent systems, **Topic 6 — Financial Market S
 
 | Act | What happens | Proof shown |
 |---|---|---|
-| 1. A market that works | Informed forecasters, noise traders, arbitrageurs trade on an LMSR prediction market. | Price converges to the ideal Bayesian posterior. |
+| 1. A market that works | Informed forecasters, noise traders, and arbitrageurs (linking the main market to a smaller reference venue) trade on an LMSR prediction market. | Price converges to the ideal Bayesian posterior. |
 | 2. Predators arrive | Predators read the mempool, classify traders as informed, front-run them. Informed traders fight back by splitting orders using adversarial search. | Short run: profit shifts informed → predators. Long run (over a season of markets): forecasters stop researching, truth lost climbs. |
 | 3. The defense | Orders become sealed commitments with a Noir ZK proof of validity; batch clears at a uniform price. Whale and oracle attacks tested too. | Predator PnL → ~0, research participation and accuracy recover — but reaction to breaking news is slower. Honest trade-off curve. |
 | 4. The proof | Monte Carlo across hundreds of seeds; real Polymarket-calibrated replay; (stretch) live paper-trading. | Charts with confidence intervals. |
@@ -40,9 +40,16 @@ We control ground truth, so we can measure how far the market strays from it.
 - **Two ideal prices** (both are Bayesian posteriors, `logit(p) = logit(π) + Σ LLR(signals ≤ t)`):
   - `p*_full` — uses **every potential signal** (all public news + private signals of *all* potential forecasters, as if everyone researched). The best the market could ever know.
   - `p*_avail` — uses only the signals that were **actually acquired** this run (public + private signals of forecasters who paid for research).
-- **Truth lost** (headline metric) = `Σ_t |p_t − p*_full_t|`. It decomposes into two parts that explain *why* truth was lost:
-  - **Aggregation loss** = `Σ_t |p_t − p*_avail_t|` — the market failed to absorb information that existed (e.g., slow incorporation, manipulation).
-  - **Participation loss** = `Σ_t |p*_avail_t − p*_full_t|` — the information never existed because forecasters stopped researching (the Grossman–Stiglitz channel).
+- **Truth lost** (headline metric) = mean squared error of the market price against the full-information posterior, `E[(p_t − p*_full_t)²]`, averaged over ticks and seeds. It decomposes **additively** into two parts that explain *why* truth was lost:
+
+  `E[(p − p*_full)²] = E[(p − p*_avail)²] + E[(p*_avail − p*_full)²]`
+
+  - **Aggregation loss** = `E[(p − p*_avail)²]` — the market failed to absorb information that existed (e.g., slow incorporation, manipulation).
+  - **Participation loss** = `E[(p*_avail − p*_full)²]` — the information never existed because forecasters stopped researching (the Grossman–Stiglitz-style channel).
+  - **Why it adds up:** the cross term `2·E[(p − p*_avail)(p*_avail − p*_full)]` is zero in expectation. `p*_full` and `p*_avail` are posteriors for nested information sets, so by the tower property `E[p*_full | acquired info] = p*_avail`. The market price `p` depends only on acquired information plus randomness (noise traders, latencies, predators) that is independent of `Y` and of the unacquired signals. So `p − p*_avail` is uncorrelated with `p*_avail − p*_full`.
+  - **When it holds:** across seeds, with `Y` drawn from the prior `π` and every signal drawn from the same generative model that the ideal prices use as their likelihood. It is an identity in expectation, not per run. It does **not** hold in Polymarket real-data mode, where `Y` is fixed by history (§8), and the report must say so there.
+  - **Reported as** the RMS of each term (√MSE) with 95% CIs. The RMS values themselves do not add; the squared terms do. So any statement that one part "accounts for" a share of truth lost is made in MSE units.
+  - **Test:** a pytest check that the cross term, averaged across many seeds, is ≈ 0 (within its standard error). If this fails, the information model or ideal-price code has a bug.
 
 ### 2.1 Endogenous research (the long-run mechanism)
 - Simulations run in **seasons**: a sequence of `M` markets (default 30), each a full market lifecycle. Agents carry wealth and learned estimates across markets in a season.
@@ -97,9 +104,16 @@ Agents **never** submit straight to the chain. They submit to our Python mempool
 1. **MockUSDC** (ERC-20, 6 decimals).
 2. **OutcomeShares** — YES/NO shares backed 1:1 by collateral (split: 1 USDC → 1 YES + 1 NO; merge reverse; redeem winning side after resolution). Modelled on Gnosis Conditional Tokens (what Polymarket uses), simplified to binary.
 3. **LMSRMarket** — cost `C(q) = b·ln(Σ exp(q_i/b))`, price `p_i = exp(q_i/b)/Σ exp(q_j/b)`. Use log-sum-exp for stability; fixed-point via PRBMath SD59x18. Max market-maker loss `b·ln 2`.
-4. **SealedBatchAuction** — per batch: commit phase (commitment + ZK proof + escrow) → reveal phase (open commitment) → clear at a single uniform price; non-revealers are slashed.
-5. **OptimisticOracle** — proposer posts outcome + bond; dispute window; disputer posts equal bond; escalation to a "vote" resolved by a stochastic honest-majority process (probability `p_vote_correct`). Loser's bond to winner (minus burn).
-6. **(Stretch) CLOB settlement** — off-chain matching of EIP-712 signed orders, on-chain settlement (Polymarket model).
+4. **SealedBatchAuction** — per batch: commit phase (commitment + ZK proof + escrow) → reveal phase (open commitment) → clear at a single uniform price; non-revealers are slashed. **Clearing by netting against the LMSR:**
+   1. Take all revealed, valid orders. Buy-YES and buy-NO orders offset each other (a matched YES/NO pair is a complete set, minted from their combined payment).
+   2. Route only the **net imbalance** `d = YES shares − NO shares` through the same `LMSRMarket` used in the other modes. If `d > 0`, buy `d` YES; if `d < 0`, buy `|d|` NO.
+   3. Every order pays **one uniform price** `p` (per YES share; a NO buyer pays `1 − p`), set so payments exactly cover the complete sets plus the LMSR cost. That makes `p` the LMSR's average price for the net imbalance: if `d > 0`, `p = cost_of_buying_d_YES / d`; if `d < 0`, `1 − p = cost_of_buying_|d|_NO / |d|`; if `d = 0`, `p` is the current LMSR marginal price.
+   4. Drop every order whose limit is violated (YES with `limit_price < p`; NO with `limit_price > p`, i.e. paying `1 − p` exceeds `1 − limit_price`), refund its escrow, and re-clear the remaining orders. Repeat until no limit is violated. Dropped orders are not re-admitted, so this terminates in at most as many rounds as there are orders.
+
+   Keeping the same LMSR as the liquidity backstop means PUBLIC and ZK_BATCH differ only in *how orders reach the market*, not in how deep the market is.
+5. **Reference venue** — a second, smaller `LMSRMarket` instance for the same event (own `b`), used by arbitrageurs (§6). No new contract; it is a second deployment.
+6. **OptimisticOracle** — proposer posts outcome + bond; dispute window; disputer posts equal bond; escalation to a "vote" resolved by a stochastic honest-majority process (probability `p_vote_correct`). Loser's bond to winner (minus burn).
+7. **(Stretch) CLOB settlement** — off-chain matching of EIP-712 signed orders, on-chain settlement (Polymarket model).
 
 Foundry unit tests + invariant tests for every contract (e.g., collateral conservation: `USDC held == outstanding complete sets`; LMSR loss bounded by `b·ln 2`).
 
@@ -107,18 +121,21 @@ Foundry unit tests + invariant tests for every contract (e.g., collateral conser
 
 ## 5. The ZK defense (Noir)
 
-**Why not plain commit-reveal?** It has two holes: (1) spam — junk commitments flood the batch; (2) the free option — commit to both sides and reveal only the profitable one.
+**What ZK adds over commit-reveal (stated precisely).** Plain commit-reveal has two weaknesses: (1) spam — junk commitments flood the batch; (2) the free option — commit to both sides and reveal only the profitable one. **Escrow + slashing deters both in either mode**, so the COMMIT_REVEAL baseline includes escrow and slashing (§5.1) and ZK is not claimed to make the free option impossible. **ZK's distinct contribution is that every commitment is proven valid and solvent at commit time**: well-formed order, escrow covers its worst-case cost, and at most one order per registered identity per batch. All of this is known before reveal, without revealing the order or which identity sent it. In plain commit-reveal, invalid or insolvent orders are only discovered at reveal, and the batch absorbs the disruption. The experiments (§5.1, E3) must measure what this difference is worth rather than assume it.
+
+**Identity binding.** Traders register an identity commitment `id = Poseidon2(trader_secret)` in an on-chain registry, posting a registration stake (the stake is what makes creating many identities costly). The registry keeps a Merkle root of registered ids. The circuit proves membership in that root, so a commitment is tied to *some* registered identity without revealing *which* one. Predators cannot link sealed orders to an address's history.
 
 **Circuit `sealed_order`** proves, without revealing the order:
-- Private inputs: `side ∈ {0,1}`, `limit_price ∈ (0,1)` (fixed-point), `size`, `salt`, `trader_secret`.
-- Public inputs: `commitment`, `escrow_amount`, `batch_id`, `nullifier`.
+- Private inputs: `side ∈ {0,1}`, `limit_price ∈ (0,1)` (fixed-point), `size`, `salt`, `trader_secret`, Merkle path for `id`.
+- Public inputs: `commitment`, `escrow_amount`, `batch_id`, `nullifier`, `identity_root`.
 - Constraints:
   - `commitment == Poseidon2(side, limit_price, size, salt, trader_secret)`
   - `side` is boolean; `0 < limit_price < 1`
   - `max_cost = side==YES ? limit_price·size : (1−limit_price)·size` and `max_cost ≤ escrow_amount`
-  - `nullifier == Poseidon2(trader_secret, batch_id)` → one order per trader per batch
+  - `Poseidon2(trader_secret)` is a leaf under `identity_root` (Merkle membership)
+  - `nullifier == Poseidon2(trader_secret, batch_id)` → one order per registered identity per batch
 - Escrow uses **fixed tiers** so the escrow amount doesn't leak order size.
-- Reveal must open the commitment; non-reveal → escrow slashed. With the nullifier, the "commit both sides" free option is impossible.
+- Reveal must open the commitment; non-reveal → escrow slashed. The free option is deterred by slashing (as in COMMIT_REVEAL), and the nullifier caps each registered identity to one order per batch. Sybil resistance comes only from the registration stake, and the report must say so.
 - Toolchain: Noir + Barretenberg (UltraHonk), auto-generated Solidity verifier. Python calls `nargo`/`bb` via subprocess for proof generation.
 
 ### 5.1 The costs of the defense (must be modelled and reported)
@@ -127,7 +144,7 @@ The defense is not free; if it wins on every metric the result looks rigged. The
 - **Execution uncertainty:** uniform clearing price is unknown at commit time; limit orders may not fill. Measured as **fill rate** and **execution delay**.
 - **Non-reveal / griefing:** a configurable share of committers (e.g., adversarial agents) refuse to reveal, accepting the slash, to distort a batch. Measured as **non-reveal rate** and its impact on clearing.
 - **Proving cost:** real proving time from `bb` is benchmarked once and fed into the sim as a per-order delay; gas cost of verification is reported from Foundry gas reports.
-- **Comparison baselines:** PRIVATE_RELAY (trust the builder) and COMMIT_REVEAL without ZK (vulnerable to spam/free option) — so the report can say exactly what ZK adds over simpler fixes.
+- **Comparison baselines:** PRIVATE_RELAY (trust the builder) and COMMIT_REVEAL with **escrow + slashing but no ZK proof**: the strongest non-ZK version, so the comparison is fair. The difference between COMMIT_REVEAL and ZK_BATCH must be measured under spam / invalid-order / free-option attacker agents, so the report can say exactly what ZK adds over the strongest simpler fix. If it adds little, that is reported.
 
 ---
 
@@ -138,8 +155,8 @@ Every agent class implements `perceive(observation) → act() → list[Tx]`, has
 | Agent | Decision logic | Course concept |
 |---|---|---|
 | **Informed forecaster** | Decides each market whether research is worth its cost (§2.1). Bayesian log-odds updating on its signals; target position via fractional Kelly: buy YES if belief `p > price m`, fraction `f = k·(p−m)/(1−m)` (symmetric for NO). **Executes the target via the order-splitting game (§6.1)** instead of one big order. | Utility-based agent, belief state, **adversarial search** |
-| **Noise trader** | Random side/size, Poisson arrivals. | Stochastic environment |
-| **Arbitrageur** | Enforces YES+NO = 1 (split/merge), cross-venue consistency vs a simulated reference venue. | Informed search / utility |
+| **Noise trader** | Random side/size, Poisson arrivals. Separate populations on the main market and the reference venue. | Stochastic environment |
+| **Arbitrageur** | Cross-venue arbitrage between the main market and the **reference venue**: a second, smaller LMSR for the same event (own `b`, own noise traders) that receives **public news only, with a delay**. Both venues pay out on the same `Y`, so a price gap is a locked-in profit; the arbitrageur trades to close it, net of costs. Informed forecasters trade only the main market. (No YES+NO parity arbitrage: LMSR prices always sum to 1 by construction.) | Informed search / utility |
 | **Trend follower** | Momentum on price (EMA crossover / time-series momentum). | Required by Topic 6 |
 | **Whale manipulator** | Budget `B`, target price `p_target`, defends it over a window. | Adversarial |
 | **Predator (MEV)** | Watches the mempool; keeps a per-address **Beta posterior over "is informed"**, updated from each trade's markout (price move after the trade). Front-runs (and optionally back-runs) when `P(informed)·E[move] > cost + builder tip`. | Bayesian inference, partial observability |
@@ -178,7 +195,7 @@ All experiments are config-driven (YAML), run on FastEngine with N seeds (defaul
 | Shock | Market stability under shock (Topic 6 requirement) | true / false breaking news; collateral stablecoin depeg | recovery time, max deviation, liquidity withdrawal, trend-follower amplification |
 
 **Metrics glossary**
-- *Truth lost*: `Σ_t |p_t − p*_full_t|` (also time-averaged); decomposed into *aggregation loss* and *participation loss* (§2).
+- *Truth lost*: `E[(p_t − p*_full_t)²]`, reported as RMS; decomposed additively (in MSE units) into *aggregation loss* and *participation loss* (§2).
 - *Research participation rate*: fraction of potential forecasters researching, per market across a season.
 - *Brier score*: `(p_T − Y)²` and time-averaged.
 - *Time-to-ε*: first tick after a news shock where `|p_t − p*_avail_t| < ε` and stays there.
@@ -186,7 +203,7 @@ All experiments are config-driven (YAML), run on FastEngine with N seeds (defaul
 - *Leakage ratio*: share of informed traders' theoretical edge captured by predators.
 - *Fill rate / execution delay / non-reveal rate*: costs of batch mechanisms (§5.1).
 
-**Reporting rule:** every hypothesis (H1–H3) gets an explicit verdict — supported, partly supported, or contradicted — with the evidence. Contradicted results are reported, not tuned away.
+**Reporting rule:** every hypothesis (H1–H3) gets an explicit verdict — supported, partly supported, or contradicted — with the evidence. Verdicts are decided by the criteria in `docs/PREREGISTRATION.md`, which are committed before the corresponding experiment runs and not edited afterwards (any later change is logged in `docs/DECISIONS.md` and disclosed in the report). Contradicted results are reported, not tuned away.
 
 ---
 
@@ -222,6 +239,7 @@ truth-for-sale/
 ├── docs/
 │   ├── SPEC.md            # this file
 │   ├── DECISIONS.md       # running log of design decisions
+│   ├── PREREGISTRATION.md # hypothesis verdict criteria, committed before experiments
 │   └── report/            # written submission
 ├── contracts/             # Foundry project
 │   ├── src/  test/  script/
@@ -247,9 +265,10 @@ truth-for-sale/
 
 | Phase | Scope | Milestone (must be demonstrable) |
 |---|---|---|
-| **1. The world** | Info model with `p*_full` / `p*_avail`; seasons + endogenous research (§2.1); FastEngine, LMSR (Python); informed/noise/arb/trend agents (informed uses simple execution for now); metrics; experiment runner; E1 | Plot: price converges to `p*_avail`; participation stable without predators; E1 results with CIs |
-| **2. The predators** | Contracts (shares, LMSR, oracle) + Foundry tests; EvmEngine on Anvil; mempool + builder; predator agent; differential test; E2a + E2b | Block-by-block front-run replay; season chart showing participation collapsing under predators (or not — report honestly) |
-| **3. The fight** | Order-splitting expectiminimax (§6.1) + E4; batch auction contract; Noir circuit + verifier; commit-reveal & ZK modes with all costs (§5.1); E3 trade-off curve; whale (E5); oracle game (E6); shock scenarios | Same seed PUBLIC vs ZK_BATCH: predator PnL ≈ 0, participation recovers, but slower reaction to news; alpha-beta node-count chart |
+| **1. The world** | Info model with `p*_full` / `p*_avail`; seasons + endogenous research (§2.1); FastEngine, LMSR (Python); main market + reference venue; informed/noise/arb/trend agents (informed uses simple execution for now); metrics incl. MSE decomposition + cross-term test; experiment runner; E1 | Plot: price converges to `p*_avail`; participation stable without predators; E1 results with CIs; cross term ≈ 0 across seeds |
+| **2a. The predators (FastEngine)** | Mempool + builder; predator agent; commit `PREREGISTRATION.md` (H1, H2); E2a + E2b — all on FastEngine | Block-by-block front-run replay; season chart showing participation collapsing under predators (or not — report honestly); H1/H2 verdicts per pre-registered criteria |
+| **2b. On-chain fidelity** | Contracts (shares, LMSR, oracle) + Foundry unit/invariant tests; EvmEngine on Anvil; differential test FastEngine ↔ EvmEngine | Differential test passes on replayed scenarios; same front-run replay reproduced on Anvil |
+| **3. The fight** | Order-splitting expectiminimax (§6.1) + E4; batch auction contract (netting clearing, §4) + identity registry; Noir circuit (with identity binding) + verifier; commit-reveal (escrow + slashing) & ZK modes with all costs (§5.1); pre-register H3, then E3 trade-off curve; whale (E5); oracle game (E6); shock scenarios | Same seed PUBLIC vs ZK_BATCH: predator PnL ≈ 0, participation recovers, but slower reaction to news; alpha-beta node-count chart |
 | **4. Real world & polish** | Polymarket-calibrated replay; dashboard; E7 tournament; written report with H1–H3 verdicts | Full demo run-through; report draft |
 | Stretch | LLM forecaster, live paper-trading, CLOB | — |
 
