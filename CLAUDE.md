@@ -35,7 +35,11 @@ An adversarial multi-agent simulation of an on-chain prediction market. Informed
 - Keep dependencies minimal; add new ones only with a reason in `docs/DECISIONS.md`.
 
 ## Commands (fill in as the project grows)
-- Python tests: `pytest -q`
+- Python env (once): `uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e ".[dev]"`
+- Python tests: `.venv/bin/pytest -q`
+- Run an experiment: `.venv/bin/python -m tfs run sim/experiments/configs/e1.yaml` (outputs in `results/<name>/`)
+- One market plot: `.venv/bin/python -m tfs plot-market sim/experiments/configs/base.yaml --seed 1`
+- Cost calibration: `.venv/bin/python -m tfs calibrate-costs sim/experiments/configs/calibrate_costs.yaml`
 - Contract tests: `cd contracts && forge test`
 - Circuit tests: `cd circuits/sealed_order && nargo test`
 - Dashboard: `streamlit run dashboard/app.py`

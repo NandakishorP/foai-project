@@ -212,9 +212,39 @@ Both run in E1. One is chosen by the pre-declared rule D-016, before any predato
 
 ---
 
+## D-022 — Outcomes of the pre-declared Phase 1 rules
+**Date:** 2026-10-10
+
+- **D-016 applied (E1, 200 seeds):** aggregation-loss RMS at the base config is 0.178 [0.162, 0.192] under `own_signals` and 0.245 [0.236, 0.254] under `price_anchored`. The CIs are disjoint, so **`own_signals` is selected**. This is provisional pending Q5 below.
+- **D-017 applied:** median gross profit of a researching forecaster = 5.4486 (n = 2000; 73% of values positive). `cost_median: 5.45` in `season_baseline.yaml`.
+
+---
+
+## D-023 — Metric additions after E1
+**Date:** 2026-10-10
+
+**Decision.**
+- New per-market column `public_only_mse` = E[(p_public − p*_avail)²], the gap of a price that ignores all research. New summary value `research_captured` = 1 − aggregation MSE / public_only MSE (ratio of means across seeds; no CI yet).
+- New per-market indicator `settled_k` (did the price settle within ε of p*_avail after shock k?). Charts show the settled share with a CI instead of mean time-to-ε, because mean time-to-ε over uncensored runs only was misleading when 60–100% of runs were censored. Time-to-ε stays in the CSVs.
+
+**Reason.** E1 showed the price stays close to the public-only posterior. Without a benchmark, "aggregation loss 0.03" could not be interpreted.
+
+---
+
+## Phase 1 finding F-001 — the market aggregates little private information
+**Date:** 2026-10-10 · **Status: needs an owner decision (Q5)**
+
+- Under `own_signals` at the base config with full participation, the main price captures about **9%** of the information research adds beyond public news (`research_captured` = 0.088). The price sits within RMS ≈ 0.05 of the public-only posterior. Under `price_anchored` it is −0.74 (worse than ignoring research).
+- Diagnosis (100 seeds per variant, not a tuning exercise): removing the arbitrageur, or both the arbitrageur and the main-venue public trader, changes little. A 10× forecaster bankroll changes little under `own_signals`.
+- Cause: each forecaster's belief is dominated by shared public news (about 2 nats) against its own private signals (about 0.2 nats), and Kelly traders move the price toward the *average* belief. `p*_avail` *sums* the independent private log-likelihood ratios, so the market reflects roughly one forecaster's worth of private information. This is the averaging risk identified in Phase 1 planning.
+- Consequences: the milestone "price converges to p*_avail" is **not met**. Time-to-ε after the shock settles in only ~11% of base runs. More forecasters *increase* truth lost (more information exists, little more is priced).
+
+---
+
 ## Open questions
 
 - **Q1 — False news vs the MSE decomposition (D-001).** SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
 - **Q2 — Pre-registration details.** See the "TO CONFIRM" items in `docs/PREREGISTRATION.md`.
 - **Q3 — Review date.** Not yet supplied.
 - **Q4 — Stable Foundry alongside foundry-zksync.** Option: `FOUNDRY_DIR=~/.foundry-stable foundryup` installs stable binaries to a separate directory (foundryup reads `FOUNDRY_DIR`), used by this project via a Makefile/env var. Alternatively keep using foundry-zksync's forge, which compiles standard EVM by default. Decide before Phase 2b.
+- **Q5 — Private-information aggregation (F-001).** The market as specified prices little private information. Options: keep it and report it; change how agents read the price; or change the information structure (e.g. Grossman–Stiglitz-style shared research signal). Owner decision needed before Phase 2a, because H2's mechanism depends on it.

@@ -1,0 +1,12 @@
+# Research-cost calibration (DECISIONS D-017, rule fixed before any run).
+#
+# Base config with the belief model chosen by the E1 rule (D-016), single markets,
+# everyone researching, no predators. `python -m tfs calibrate-costs` reports the
+# median gross trading profit of a researching forecaster. That number becomes
+# research.cost_median in the season configs.
+
+extends: base.yaml
+name: calibrate_costs
+
+agents:
+  belief_model: own_signals   # chosen by rule D-016 from E1 (aggregation RMS 0.178 vs 0.245, CIs disjoint)

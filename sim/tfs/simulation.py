@@ -140,6 +140,7 @@ class MarketRecord:
     price_ref: np.ndarray
     p_full: np.ndarray
     p_avail: np.ndarray
+    p_public: np.ndarray  # posterior from public news alone: what the market knows if research is ignored
     shock_ticks: tuple[int, ...]
     pnl: dict[str, float]  # agent_id -> final cash minus starting cash (gross of research cost)
     kinds: dict[str, str]  # agent_id -> agent kind
@@ -215,6 +216,7 @@ def run_market(
         price_ref=price_ref,
         p_full=p_star_full(tape),
         p_avail=p_star_avail(tape, researchers),
+        p_public=p_star_avail(tape, []),
         shock_ticks=tape.shock_ticks,
         pnl={a.agent_id: final[a.agent_id].cash - a.bankroll for a in agents},
         kinds={a.agent_id: a.kind for a in agents},

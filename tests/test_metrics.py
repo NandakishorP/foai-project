@@ -65,3 +65,11 @@ def test_rms_ci_is_sqrt_of_mse_ci() -> None:
     assert r.mean == pytest.approx(math.sqrt(e.mean))
     assert r.hi == pytest.approx(math.sqrt(e.hi))
     assert r.lo == pytest.approx(math.sqrt(max(e.lo, 0.0)))
+
+
+def test_research_captured() -> None:
+    from tfs.experiments.runner import research_captured
+
+    assert research_captured([0.0, 0.0], [0.1, 0.3]) == 1.0  # price equals p*_avail
+    assert research_captured([0.1, 0.3], [0.1, 0.3]) == 0.0  # no better than ignoring research
+    assert research_captured([0.4, 0.4], [0.1, 0.3]) < 0

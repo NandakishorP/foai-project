@@ -1,0 +1,18 @@
+# E1 (SPEC §7): without predators, does the market find the truth?
+#
+# Single markets with fixed full participation (everyone researches), so
+# p*_avail = p*_full and all truth lost is aggregation loss. Each factor is varied
+# one at a time around the base config, under both belief models
+# (DECISIONS D-013). The belief model for later phases is chosen by the
+# pre-declared rule D-016. The full sweep is reported for both models.
+
+extends: base.yaml
+name: e1
+
+sweep:
+  crossed:
+    agents.belief_model: [own_signals, price_anchored]
+  one_at_a_time:
+    agents.forecasters.count: [2, 5, 10, 20]
+    information.precision_scale: [0.5, 1.0, 2.0]
+    market.b_main: [30.0, 100.0, 300.0]

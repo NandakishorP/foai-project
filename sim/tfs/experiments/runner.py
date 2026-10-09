@@ -60,9 +60,12 @@ def market_row(record: MarketRecord, season: SeasonRecord, epsilon: float) -> di
         "brier_final": brier_final,
         "brier_mean": brier_mean,
         "ref_truth_mse": float(np.mean((record.price_ref - record.p_full) ** 2)),
+        # Benchmark for aggregation: the gap a price ignoring all research would have to p*_avail.
+        "public_only_mse": float(np.mean((record.p_public - record.p_avail) ** 2)),
     }
     for k, ticks in enumerate(time_to_epsilon(record.price_main, record.p_avail, record.shock_ticks, epsilon)):
         row[f"time_to_eps_{k}"] = math.nan if ticks is None else ticks
+        row[f"settled_{k}"] = 0.0 if ticks is None else 1.0  # share of runs that settle at all (with a CI)
     for kind in AGENT_KINDS:
         row[f"pnl_{kind}"] = sum(v for aid, v in record.pnl.items() if record.kinds[aid] == kind)
     costs = [season.traits[i].cost for i in record.researchers]
@@ -139,7 +142,20 @@ def summarise(rows_by_seed: Sequence[Sequence[dict[str, Any]]]) -> dict[str, Any
         e = rms_ci(per_seed[name])
         rms_name = name.replace("_mse", "_rms")
         out[rms_name], out[f"{rms_name}_lo"], out[f"{rms_name}_hi"] = e.mean, e.lo, e.hi
+    out["research_captured"] = research_captured(per_seed["aggregation_mse"], per_seed["public_only_mse"])
     return out
+
+
+def research_captured(aggregation_mse: Sequence[float], public_only_mse: Sequence[float]) -> float:
+    """Share of the acquired research information that the price reflects.
+
+    1 − E[(p − p*_avail)²] / E[(p_public − p*_avail)²]: 1 means the price matches
+    p*_avail, 0 means it is no closer than a price that ignores all research,
+    negative means further away. A ratio of means across seeds, so it is
+    stable even when single runs have a tiny denominator.
+    """
+    denominator = float(np.mean(public_only_mse))
+    return 1.0 - float(np.mean(aggregation_mse)) / denominator if denominator > 0 else math.nan
 
 
 def summarise_per_market(rows_by_seed: Sequence[Sequence[dict[str, Any]]]) -> list[dict[str, Any]]:
