@@ -33,11 +33,15 @@ Course context: AI course, multi-agent systems, **Topic 6 — Financial Market S
 We control ground truth, so we can measure how far the market strays from it.
 
 - Each market `m` is a binary event with hidden outcome `Y ∈ {0,1}` drawn from prior `π` (default 0.5).
-- **Signals.** Information arrives as Gaussian signals: `s ~ N(+μ, σ²)` if `Y=1`, `N(−μ, σ²)` if `Y=0`. Log-likelihood ratio of one signal: `LLR(s) = 2μs/σ²`.
+- **Signals.** Information arrives as Gaussian signals centred on `+μ` if `Y=1` and `−μ` if `Y=0`. An independent signal `s ~ N(±μ, σ²)` has log-likelihood ratio `LLR(s) = 2μs/σ²`. Information strength is configured in nats (expected total LLR per market) and converted to noise variances.
 - **Public news.** A Poisson stream of public signals (everyone sees them, with per-agent latency).
-- **Private signals.** Each potential forecaster `i` *can* receive private signals with its own precision `1/σ_i²`, but only in epochs where it **chooses to pay** its research cost `c_i` (see §2.1). The potential signal stream is generated for everyone from the seed regardless, so runs with different participation stay comparable.
+- **Research (private) signals, correlated** (DECISIONS D-024, D-025). Research events arrive as one Poisson stream. At each event every potential forecaster `i` receives `s_i = ±μ + u + e_i`, with a common component `u ~ N(0, τ²)` shared by all forecasters and idiosyncratic noise `e_i ~ N(0, σ_e²)`.
+  - `ρ = τ²/(τ² + σ_e²)` is the correlation of two forecasters' signals given `Y`: `ρ = 0` is independent research, `ρ = 1` the textbook Grossman–Stiglitz shared signal.
+  - The configured quantity is the information of all forecasters' research combined (`pooled_nats`), so sweeping `ρ` redistributes a fixed amount of information rather than changing it.
+  - Research quality is the same for every forecaster; heterogeneity comes from costs (§2.1).
+  - A forecaster sees its signals only in markets where it **chooses to pay** its research cost `c_i` (§2.1). The potential signals are generated for everyone from the seed regardless, so runs with different participation stay comparable.
 - **Shock events.** Scheduled or random high-precision public signals ("breaking news"), optionally *false* news (signal pointing the wrong way, later corrected).
-- **Two ideal prices** (both are Bayesian posteriors, `logit(p) = logit(π) + Σ LLR(signals ≤ t)`):
+- **Two ideal prices**, both exact Bayesian posteriors: `logit(p) = logit(π) + Σ LLR(public signals ≤ t) + Σ LLR_S(research events ≤ t)`. For a group `S` of `k` researchers, the research LLR of one event is the exact correlated-Gaussian value `LLR_S = 2μ·Σ_{i∈S} s_i / (k·τ² + σ_e²)` (the group mean is sufficient). It is **not** the sum of individual LLRs, which would over-count the shared noise when `ρ > 0`.
   - `p*_full` — uses **every potential signal** (all public news + private signals of *all* potential forecasters, as if everyone researched). The best the market could ever know.
   - `p*_avail` — uses only the signals that were **actually acquired** this run (public + private signals of forecasters who paid for research).
 - **Truth lost** (headline metric) = mean squared error of the market price against the full-information posterior, `E[(p_t − p*_full_t)²]`, averaged over ticks and seeds. It decomposes **additively** into two parts that explain *why* truth was lost:
@@ -54,7 +58,7 @@ We control ground truth, so we can measure how far the market strays from it.
 ### 2.1 Endogenous research (the long-run mechanism)
 - Simulations run in **seasons**: a sequence of `M` markets (default 30), each a full market lifecycle. Agents carry wealth and learned estimates across markets in a season.
 - Before each market, every potential forecaster decides whether to research: research iff `EMA_i(profit per researched market) > c_i` (with small exploration probability `ε` so an agent that quit can rediscover profitability).
-- Forecasters have heterogeneous costs `c_i` and precisions, so participation is a smooth fraction, not all-or-nothing.
+- Forecasters have heterogeneous costs `c_i` (lognormal around a calibrated median), so participation is a smooth fraction, not all-or-nothing. Research quality is common to all (D-025).
 - **Research participation rate** over the season is a primary metric. Short-run effects = first market of a season; long-run effects = the season's final stretch after participation has settled.
 
 Everything (signals, latencies, agent seeds) is generated from a single master seed → fully reproducible runs.
@@ -184,7 +188,7 @@ All experiments are config-driven (YAML), run on FastEngine with N seeds (defaul
 
 | ID | Question | Independent variable | Key metrics |
 |---|---|---|---|
-| E1 | Without predators, does the market find the truth? | # informed, signal precision, `b` | truth lost, aggregation loss, Brier, time-to-ε |
+| E1 | Without predators, does the market find the truth? | # informed, signal precision, `b`, research correlation `ρ` (robustness) | truth lost, aggregation loss, share of research information priced, Brier, time-to-ε / settled share |
 | E2a | **Short run:** what do predators do with participation fixed? (tests H1) | # predators, predator latency | truth lost, informed PnL, predator PnL, leakage ratio |
 | E2b | **Long run:** what happens when research is a choice? (tests H2) | # predators, research cost distribution; full seasons | participation rate over the season, participation loss, truth lost |
 | E3 | Which defense works, and what does it cost? (tests H3) | mempool policy: PUBLIC / PRIVATE_RELAY / COMMIT_REVEAL / ZK_BATCH; batch interval `K` | all of the above + time-to-ε after news, fill rate, execution delay, non-reveal impact → **trade-off curve** |

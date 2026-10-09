@@ -1,0 +1,6 @@
+{
+  "rule": "DECISIONS D-026",
+  "choice": null,
+  "reason": "no rho satisfies both criteria on the grid; nothing frozen (report to owner)",
+  "n_seeds": 200
+}

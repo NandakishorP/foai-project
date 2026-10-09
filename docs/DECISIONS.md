@@ -293,6 +293,21 @@ p*_avail and p*_full use the exact Gaussian posterior for a group of k researche
 
 ---
 
+## D-028 — Baseline calibration round 1 (D-026): no feasible point, nothing frozen
+**Date:** 2026-10-10 · Rule committed at `64b802d` before the run. Full grid in `docs/report/calibration/D-026_round1/`.
+
+**Result.** None of the 24 grid points meets both (a) research_captured ≥ 0.6 and (b) steady-state participation 50–70%. The closest is rho = 1.0 with cost = 0.25·M: participation 61% ✓, captured 0.47 ✗. Captured rises with rho at every cost level. Steady-state participation never exceeds 61%.
+
+**Diagnostic (one variant at a time, nothing selected).**
+- At rho = 1 with *full* participation, captured is 0.87. The shortfall is informed capital at ~6 researchers, not the model's ability to aggregate.
+- Raising forecaster capital (bankroll ×4, or Kelly k = 1) gives 0.98. Removing the arbitrageur, the ref-venue public trader or the noise traders, or zero latency, changes little.
+
+**Measurement caveat.** `research_captured` is ill-conditioned when little research information exists: low rho at low participation makes the denominator small. The strongly negative values there (down to −2.4) mean "the price is noisier than the small research signal". They do not mean the market is worse than at full participation in absolute terms.
+
+**Status.** Rule D-026 says stop and report to the owner. Pending: whether to extend the calibrated set (e.g. informed capital), relax a criterion, or change the steady-state definition. Until then `rho` stays at the placeholder 0.0 in base.yaml, and E1, the season baseline and the pre-registration rewrite wait.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
@@ -300,3 +315,4 @@ p*_avail and p*_full use the exact Gaussian posterior for a group of k researche
 - **Q3 — Review date.** Not yet supplied.
 - **Q4 — Stable Foundry alongside foundry-zksync.** Installed: `forge Version: 1.3.5-foundry-zksync-v0.1.7` (checked 2026-10-10). Option: `FOUNDRY_DIR=~/.foundry-stable foundryup` installs stable binaries to a separate directory (foundryup reads `FOUNDRY_DIR`), used by this project via a Makefile/env var. Alternatively keep using foundry-zksync's forge, which compiles standard EVM by default. Decide before Phase 2b.
 - **Q5 — RESOLVED 2026-10-10 by D-024 (correlated signals) and D-026 (baseline calibration).** Original question: Private-information aggregation (F-001). The market as specified prices little private information. Options: keep it and report it; change how agents read the price; or change the information structure (e.g. Grossman–Stiglitz-style shared research signal). Owner decision needed before Phase 2a, because H2's mechanism depends on it.
+- **Q6 — Baseline calibration infeasible (D-028).** Owner decision needed on how to proceed before rho and costs can be frozen.

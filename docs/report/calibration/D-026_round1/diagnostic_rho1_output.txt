@@ -1,0 +1,11 @@
+rho=1, full participation, single markets, 150 seeds (one variant at a time; diagnostic only, nothing selected)
+rho=1 base                     research_captured   0.87   aggregation RMS 0.066   forecaster pnl/market   5.00
+no arbitrageur                 research_captured   0.93   aggregation RMS 0.049   forecaster pnl/market   4.93
+no ref-venue public trader     research_captured   0.88   aggregation RMS 0.064   forecaster pnl/market   5.06
+forecaster bankroll x4         research_captured   0.98   aggregation RMS 0.027   forecaster pnl/market   5.47
+full Kelly (k=1)               research_captured   0.98   aggregation RMS 0.027   forecaster pnl/market   5.47
+max_order x5                   research_captured   0.88   aggregation RMS 0.064   forecaster pnl/market   5.05
+b_main 30                      research_captured   0.93   aggregation RMS 0.049   forecaster pnl/market   2.62
+no noise traders (main)        research_captured   0.88   aggregation RMS 0.064   forecaster pnl/market   4.88
+no trend followers             research_captured   0.82   aggregation RMS 0.078   forecaster pnl/market   4.95
+forecaster public latency 0    research_captured   0.89   aggregation RMS 0.062   forecaster pnl/market   5.24
