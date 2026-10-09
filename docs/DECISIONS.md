@@ -93,6 +93,28 @@ Each term is reported as an RMS with 95% CIs; shares of truth lost are stated in
 
 ---
 
+## D-010 — Python package lives in `sim/tfs/`
+**Date:** 2026-10-10 · **SPEC:** §10
+
+**Decision.** `pyproject.toml` sits at the repo root and uses `sim/` as the source root, so the package is `sim/tfs/` (`tfs/core`, `tfs/market`, `tfs/engines`, ...). YAML configs stay outside the package in `sim/experiments/configs/` (the path in CLAUDE.md). The CLI is `python -m tfs`.
+
+**Reason.** SPEC §10 shows `sim/` holding the package's subfolders directly, but Python's import name must match a directory name. A standard source-root layout keeps `import tfs` working without import-path tricks.
+
+---
+
+## D-011 — Phase 1 Python dependencies
+**Date:** 2026-10-10
+
+**Decision.**
+- Runtime: `numpy` (vectorised signal tapes, RNG), `scipy` (t-quantiles for 95% CIs), `pyyaml` (configs), `matplotlib` (static milestone and experiment plots).
+- Dev: `pytest`, `hypothesis` (property tests for LMSR invariants).
+- Not added yet: pandas (the csv module is enough so far); Plotly (deferred to the Phase 4 dashboard).
+- Environment: `uv venv --python 3.12 .venv` and `uv pip install -e ".[dev]"`.
+
+**Reason.** Keep dependencies minimal (CLAUDE.md); each one above is used for a concrete purpose.
+
+---
+
 ## Open questions
 
 - **Q1 — False news vs the MSE decomposition (D-001).** SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

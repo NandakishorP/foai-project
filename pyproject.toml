@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tfs"
+version = "0.1.0"
+description = "Truth for Sale: adversarial multi-agent simulation of an on-chain prediction market"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",       # t-distribution quantiles for confidence intervals
+    "pyyaml>=6.0",       # experiment configs
+    "matplotlib>=3.8",   # static milestone and experiment plots
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "hypothesis>=6.100",  # property-based tests for LMSR invariants
+]
+
+# The Python package `tfs` lives in sim/tfs (sim/ is the source root, see DECISIONS D-010).
+[tool.setuptools.packages.find]
+where = ["sim"]
+include = ["tfs*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

@@ -1,0 +1,102 @@
+# Base configuration. Every parameter lives here, with its rationale.
+# Experiments `extends: base.yaml` and override only what they change.
+#
+# Scale-setting idea: information strength is specified in "nats", the expected
+# total log-likelihood ratio a source contributes to the posterior log-odds per
+# market. Signal noise sigma is derived from it (see tfs.core.information). The
+# market's hidden truth then becomes knowable at a controlled pace instead of
+# depending on an arbitrary sigma.
+
+name: base
+
+seeds:
+  count: 200          # SPEC §7 default: 200 independent runs per configuration
+  start: 0
+
+season:
+  n_markets: 1        # single market by default; season experiments set 30 (SPEC §2.1)
+
+market:
+  ticks: 200          # blocks per market: long enough for ~10 public news items and a mid-market shock
+  prior: 0.5          # SPEC §2 default prior pi
+  b_main: 100.0       # LMSR liquidity. 100 shares move the log-odds by 1. Comparable to the
+                      #   combined forecaster bankroll (10 x 100), so informed capital can move
+                      #   the price but not trivially. Swept in E1.
+  b_ref: 30.0         # reference venue is smaller than the main market (DECISIONS D-005)
+
+information:
+  mu: 1.0             # only mu/sigma matters; mu fixes the scale
+  precision_scale: 1.0  # multiplies all signal precisions; swept in E1
+  public:
+    rate: 0.05        # ~10 public news items per market
+    expected_nats: 2.0  # public news alone moves log-odds by ~2 in expectation (p ~ 0.88)
+  private:
+    rate: 0.05        # ~10 private signals per researching forecaster per market
+    nats_min: 0.1     # heterogeneous forecaster quality (SPEC §2.1); mean 0.2 nats each,
+    nats_max: 0.3     #   so 10 forecasters hold ~2 nats in total: as much as all public news.
+                      # Total with the shock is ~5 nats: p*_full ends near 0.99 but stays well
+                      # inside (0,1) for most of the market, so accuracy metrics do not saturate.
+  shocks:
+    - tick: 100       # one true breaking-news event mid-market (Topic 6 shock; time-to-epsilon)
+      nats: 1.0       # a single signal worth half of all routine public news
+
+agents:
+  belief_model: own_signals   # SPEC default; price_anchored is the alternative (DECISIONS D-013)
+
+  forecasters:
+    count: 10
+    bankroll: 100.0   # fixed per market (DECISIONS D-015)
+    kelly_fraction: 0.25  # quarter-Kelly: common practice to limit estimation-error risk
+    public_latency: 1     # sees public news one block after it is published
+    max_order: 20.0       # simple execution cap per block (order splitting comes in Phase 3)
+    min_order: 0.5        # ignore dust-sized adjustments
+    research:
+      mode: always        # E1 fixes participation; season experiments use "endogenous"
+      cost_median: null   # set by the cost-calibration rule (DECISIONS D-017) for endogenous runs
+      cost_log_sigma: 0.5 # costs vary ~x1.6 across forecasters (one log-sd), giving a smooth participation fraction
+      ema_alpha: 0.3      # weights the latest market ~30%: adapts within a few markets, not jumpy
+      explore_prob: 0.05  # SPEC §2.1 epsilon: a forecaster that quit retries ~once per 20 markets
+
+  public_main:            # carries public news into the main market (DECISIONS D-019)
+    count: 1
+    bankroll: 100.0
+    kelly_fraction: 0.25
+    delay: 1
+    max_order: 20.0
+    min_order: 0.5
+  public_ref:             # the reference venue sees public news only, with a delay (D-005)
+    count: 1
+    bankroll: 30.0        # scaled with b_ref
+    kelly_fraction: 0.25
+    delay: 5
+    max_order: 6.0
+    min_order: 0.5
+
+  noise_main:
+    count: 5
+    rate: 0.1             # ~100 noise orders per market in total
+    mean_size: 3.0        # each moves log-odds by ~0.03; random-walk sd ~0.3 over a market
+    bankroll: 1000.0      # never cash-constrained
+  noise_ref:
+    count: 3
+    rate: 0.1
+    mean_size: 1.0        # scaled with b_ref: similar relative noise to the main market
+    bankroll: 1000.0
+
+  arbitrageurs:
+    count: 1
+    capital: 500.0
+    min_profit: 0.05      # ignore gaps worth less than 5 cents
+    slippage: 0.02        # tolerance on each leg's average price
+
+  trend:
+    count: 2
+    fast_span: 5          # classic fast/slow EMA crossover
+    slow_span: 20
+    threshold: 0.02       # act on a 2-point gap between fast and slow price averages
+    order_size: 2.0
+    max_position: 20.0
+    bankroll: 200.0
+
+metrics:
+  epsilon: 0.05           # "close enough" to p*_avail for time-to-epsilon
