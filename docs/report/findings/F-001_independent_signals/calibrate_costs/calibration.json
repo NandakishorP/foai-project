@@ -1,0 +1,11 @@
+{
+  "rule": "DECISIONS D-017: cost_median = median gross trading profit of a researching forecaster",
+  "cost_median": 5.448642184843955,
+  "mean": 4.319465104561959,
+  "quartiles": [
+    -0.5079221075265323,
+    10.100076655721946
+  ],
+  "n_values": 2000,
+  "share_positive": 0.7335
+}

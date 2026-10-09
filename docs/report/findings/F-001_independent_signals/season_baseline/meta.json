@@ -1,0 +1,12 @@
+{
+  "git": {
+    "commit": "599b7ea9a8e611c22f657423b21e5b8b6c26bf71",
+    "dirty": false
+  },
+  "seeds": [
+    0,
+    199
+  ],
+  "n_points": 1,
+  "config": "sim/experiments/configs/season_baseline.yaml"
+}
