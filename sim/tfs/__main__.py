@@ -4,6 +4,7 @@
   plot-market CONFIG     plot one market of one seed: price vs p*_avail vs p*_full vs truth
   calibrate-costs CONFIG apply the research-cost calibration rule (DECISIONS D-017)
   calibrate-baseline CONFIG  choose rho and the cost median by the rule in DECISIONS D-026
+  replay CONFIG          explain, block by block, a front-run in one market of one seed
 """
 
 from __future__ import annotations
@@ -30,7 +31,11 @@ def _charts(result: ExperimentResult, config_path: Path) -> list[Path]:
         group_by = crossed[0] if crossed else None
         written.append(plots.plot_ofat(result.summary, ofat, group_by, f"{result.name}: one factor at a time",
                                        result.out_dir / f"{result.name}_sweeps.png"))
-    if result.points[0].config.season.n_markets > 1:
+    if "agents.predators.count" in crossed and result.points[0].config.season.n_markets > 1:
+        written.append(plots.plot_season_compare(result.per_market, "agents.predators.count",
+                                                 f"{result.name}: seasons with and without predators",
+                                                 result.out_dir / f"{result.name}_seasons.png"))
+    elif result.points[0].config.season.n_markets > 1:
         for point in result.points:
             rows = [r for r in result.per_market if r["point"] == point.label]
             slug = point.label.replace("|", "__").replace("=", "-").replace(".", "_")
@@ -44,6 +49,8 @@ def cmd_run(args: argparse.Namespace) -> None:
     print(f"wrote {result.out_dir}")
     for path in _charts(result, args.config):
         print(f"wrote {path}")
+    if result.verdict is not None:
+        print(json.dumps(result.verdict, indent=2))
 
 
 def cmd_plot_market(args: argparse.Namespace) -> None:
@@ -83,6 +90,18 @@ def cmd_calibrate_baseline(args: argparse.Namespace) -> None:
     print(json.dumps(summary, indent=2))
 
 
+def cmd_replay(args: argparse.Namespace) -> None:
+    from tfs.core.config import replace_in
+    from tfs.experiments.replay import replay
+
+    cfg = load_config(args.config)
+    if args.predators is not None:
+        cfg = replace_in(cfg, "agents.predators.count", args.predators)
+    text, png = replay(cfg, args.seed, args.market, args.out / cfg.name)
+    print(text.read_text())
+    print(f"wrote {text}\nwrote {png}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m tfs")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -107,6 +126,14 @@ def main() -> None:
     pm.add_argument("--market", type=int, default=0)
     pm.add_argument("--out", type=Path, default=None)
     pm.set_defaults(func=cmd_plot_market)
+
+    rp = sub.add_parser("replay", help="explain a front-run block by block")
+    rp.add_argument("config", type=Path)
+    rp.add_argument("--seed", type=int, default=1)
+    rp.add_argument("--market", type=int, default=10, help="0-based market index in the season")
+    rp.add_argument("--predators", type=int, default=1, help="override the number of predators")
+    rp.add_argument("--out", type=Path, default=Path("results"))
+    rp.set_defaults(func=cmd_replay)
 
     args = parser.parse_args()
     args.func(args)

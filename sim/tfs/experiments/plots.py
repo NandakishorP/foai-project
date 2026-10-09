@@ -211,3 +211,40 @@ def _save(fig: plt.Figure, path: Path) -> Path:
     fig.savefig(path, dpi=150, facecolor=SURFACE)
     plt.close(fig)
     return path
+
+
+# --------------------------------------------------------------------------- #
+# E2: seasons with and without predators
+# --------------------------------------------------------------------------- #
+
+
+def plot_season_compare(per_market: Sequence[dict[str, Any]], group_by: str, title: str, path: Path,
+                        group_label: str = "predators") -> Path:
+    """Participation and truth lost per market, one line per value of `group_by` (baseline points only)."""
+    rows = [r for r in per_market if r["point"].endswith("baseline")]
+    groups = sorted({r[group_by] for r in rows})
+    fig, axes = _figure(2, 1, (9.0, 6.6), sharex=True)
+    top, bottom = axes[0, 0], axes[1, 0]
+    for k, group in enumerate(groups):
+        mine = sorted((r for r in rows if r[group_by] == group), key=lambda r: r["market"])
+        x = np.array([r["market"] for r in mine]) + 1
+        colour = SERIES[k % len(SERIES)]
+        label = f"{group} {group_label}"
+        for ax, metric, scale in ((top, "participation", 100.0), (bottom, "truth_mse", 1.0)):
+            y = np.array([r[metric] for r in mine]) * scale
+            lo = np.array([r[f"{metric}_lo"] for r in mine]) * scale
+            hi = np.array([r[f"{metric}_hi"] for r in mine]) * scale
+            ax.fill_between(x, lo, hi, color=colour, alpha=0.15, linewidth=0)
+            ax.plot(x, y, color=colour, linewidth=LINE_WIDTH, label=label)
+            _direct_label(ax, x[-1], y[-1], label)
+    top.set_ylim(0, 105)
+    top.set_ylabel("forecasters researching (%)")
+    top.set_title(title, loc="left", fontsize=11)
+    bottom.set_ylabel("truth lost (MSE vs p*_full)")
+    bottom.set_xlabel("market in season")
+    bottom.set_xlim(1, max(r["market"] for r in rows) + 4)
+    legend = top.legend(loc="lower left", fontsize=8, frameon=False, ncols=len(groups))
+    for text in legend.get_texts():
+        text.set_color(INK_SECONDARY)
+    fig.text(0.01, 0.005, "bands: 95% CI across seeds (unpaired; verdicts use paired statistics)", fontsize=7, color=MUTED)
+    return _save(fig, path)

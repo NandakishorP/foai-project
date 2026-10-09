@@ -427,6 +427,15 @@ The remaining predator parameters (markout threshold, H, drift-EMA decay, warm-u
 
 ---
 
+## D-035 — E2a first attempt crashed (no results); overflow fix
+**Date:** 2026-10-10
+
+The first E2a run crashed after ~11 minutes with `OverflowError` in `cost_at_price`, called from the predator's affordability search. When the predator's side was nearly free (price near 0 or 1), the search bound ran to millions of shares and `expm1(shares/b)` overflowed. **No results were written**; the run produced no data that anyone looked at.
+
+**Fix.** `cost_at_price` uses log-sum-exp for large trades, and handles certain or impossible sides exactly. Property tests: it never overflows, and it matches the q-based cost function. The predator's search is capped at 20 log-odds of price movement. The zero-predator digest is unchanged. E2a and E2b were then run from a clean commit with no other change.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

@@ -65,7 +65,15 @@ def cost_at_price(price: float, b: float, side: Side, shares: float) -> float:
     log1p/expm1 keep this accurate for small trades.
     """
     p_side = price if side is Side.YES else 1.0 - price
-    return b * math.log1p(p_side * math.expm1(shares / b))
+    if p_side >= 1.0:  # the side is certain: every share costs exactly 1
+        return shares
+    if p_side <= 0.0:  # the side is impossible: shares are free
+        return 0.0
+    z = shares / b
+    if abs(z) < 1.0:  # small trades: log1p/expm1 is the accurate form
+        return b * math.log1p(p_side * math.expm1(z))
+    # large trades: ln(p·e^z + 1 − p) via log-sum-exp, which cannot overflow
+    return b * _logaddexp(math.log(p_side) + z, math.log1p(-p_side))
 
 
 def yes_shares_to_move_price(p_from: float, p_to: float, b: float) -> float:

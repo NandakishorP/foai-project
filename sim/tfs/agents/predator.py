@@ -336,7 +336,8 @@ class Predator(Agent):
             return 0.0
         price = sigmoid(slot)
         side_price = price if side is Side.YES else 1.0 - price
-        lo, hi = 0.0, budget / side_price  # each share costs at least the current price of its side
+        # Each share costs at least the side's current price; never search beyond 20 log-odds of movement.
+        lo, hi = 0.0, min(budget / side_price, 20.0 * self.b)
         for _ in range(BISECTION_STEPS):
             mid = (lo + hi) / 2
             if cost_at_price(price, self.b, side, mid) <= budget:

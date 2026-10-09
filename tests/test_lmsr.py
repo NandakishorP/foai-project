@@ -81,3 +81,25 @@ def test_buying_raises_own_price() -> None:
     assert m.price() > p0
     m.execute(Side.NO, 30.0)
     assert m.price() < p0
+
+
+@given(price=st.floats(min_value=0.0, max_value=1.0), b=liquidity,
+       shares=st.floats(min_value=-1e6, max_value=1e7), side=st.sampled_from(list(Side)))
+def test_cost_at_price_never_overflows(price: float, b: float, shares: float, side: Side) -> None:
+    from tfs.market.lmsr import cost_at_price
+
+    p_side = price if side is Side.YES else 1 - price
+    if shares < 0 and p_side >= 1.0:
+        return  # selling a certain side: well defined (= shares) but irrelevant
+    assert math.isfinite(cost_at_price(price, b, side, shares))
+
+
+@given(q_yes=st.floats(-500, 500), q_no=st.floats(-500, 500), b=liquidity, shares=size,
+       side=st.sampled_from(list(Side)))
+def test_cost_at_price_matches_cost_function(q_yes: float, q_no: float, b: float, shares: float, side: Side) -> None:
+    from tfs.market.lmsr import cost_at_price
+
+    p = price_yes(q_yes, q_no, b)
+    if not 1e-9 < p < 1 - 1e-9:
+        return
+    assert cost_at_price(p, b, side, shares) == pytest.approx(trade_cost(q_yes, q_no, b, side, shares), rel=1e-7, abs=1e-7)
