@@ -241,10 +241,62 @@ Both run in E1. One is chosen by the pre-declared rule D-016, before any predato
 
 ---
 
+## D-024 — Correlated research signals become the default model
+**Date:** 2026-10-10 · **SPEC:** §2 · **Owner decision (answer to Q5)**
+
+**Decision.** At each research event every potential forecaster i receives s_i = ±mu + u + e_i, with a common component u ~ N(0, tau²) and idiosyncratic noise e_i ~ N(0, sigma_e²). The parameter rho = tau²/(tau² + sigma_e²) is the correlation of two forecasters' signals given Y. rho = 0 is independent research (the F-001 setting); rho = 1 is the textbook Grossman–Stiglitz shared signal.
+
+p*_avail and p*_full use the exact Gaussian posterior for a group of k researchers, LLR = 2·mu·Σs_i/(k·tau² + sigma_e²) (Sherman–Morrison; the group mean is sufficient). They do not sum individual LLRs. Tests check this against a brute-force multivariate Gaussian, by Monte Carlo calibration at rho = 0 and 0.6, with a negative control showing naive summation is overconfident, and with a zero cross term at rho = 0.6.
+
+**Reason.** F-001: with independent signals the Kelly market prices the average belief, so research participation barely moves market accuracy. The independent-signal results are kept as an E1 finding (`docs/report/findings/F-001_independent_signals/`).
+
+---
+
+## D-025 — Consequences of the correlated model
+**Date:** 2026-10-10 · **SPEC:** §2, §2.1
+
+**Decision (Claude, flagged to the owner).**
+1. **Equal research quality for all forecasters.** At rho = 1 every forecaster must see the identical signal, which per-forecaster precisions cannot allow. Heterogeneity (SPEC §2.1) now comes from research costs only.
+2. **`pooled_nats` replaces per-forecaster nats.** The configured quantity is the information of *all* forecasters' research combined (2 nats, the same total as before), and tau², sigma_e² are derived from it and rho. Sweeping rho then changes how the same information is spread across forecasters, not how much exists. At rho = 0 each forecaster holds pooled_nats/N = 0.2 nats, the old mean.
+3. **Research events are shared in time.** They are a single Poisson stream, rather than independent arrival times per forecaster. Within one event the common component must hit everyone at once. At rho = 0 this reproduces F-001's information content but synchronises arrival times; the E1 rho = 0 point is compared against F-001 to check the difference is small.
+4. **CRN preserved:** event times and u come from shared streams, and each forecaster's e_i from its own stream.
+
+---
+
+## D-026 — Baseline calibration rule (pre-declared, before any calibration run)
+**Date:** 2026-10-10 · **Owner requirement:** without predators, (a) share of research information priced ≥ 0.6 and (b) steady-state participation 50–70%. This is calibration of the no-predator baseline, not outcome tuning. It runs before any predator code exists, and the values are frozen and committed before any Phase 2a experiment.
+
+**Rule.**
+- Fixed: `belief_model: own_signals` (D-016), `cost_log_sigma: 0.5`, every other base parameter. Calibrated: `information.private.rho` and `research.cost_median`.
+- Grid: rho ∈ {0, 0.25, 0.5, 0.75, 0.9, 1.0}.
+  - For each rho, compute the cost unit M(rho) by the D-017 procedure: the median gross profit of a researching forecaster at full participation, single markets, 200 seeds.
+  - Candidate cost medians: m·M(rho) for m ∈ {0.25, 0.5, 0.75, 1.0}.
+- Each grid point runs a 30-market season, 200 seeds, endogenous research, no predators. The steady state is markets 21–30.
+  - (a) `research_captured` = 1 − mean aggregation MSE / mean public-only MSE, over steady-state markets and seeds.
+  - (b) mean participation over steady-state markets and seeds.
+- Selection:
+  - Choose the **smallest feasible rho** (information as dispersed as possible, closest to the F-001 model). For that rho, choose the m whose participation is closest to 60%.
+  - If no grid m of that rho has participation in [50%, 70%] but (a) holds and participation brackets the band between adjacent m values, bisect m (at most 6 steps) until participation lands in the band, then re-check (a).
+  - If no rho is feasible: stop and report to the owner; nothing is frozen.
+- The whole grid is saved (`results/baseline_calibration/grid.csv`) and reported, not only the chosen point.
+
+---
+
+## D-027 — `price_anchored` double-counts correlated information
+**Date:** 2026-10-10 · **Owner check (point 3)**
+
+**Finding.**
+- *Own evidence is counted once.* A lone anchored trader moves the price's log-odds by exactly the sum of its evidence, with no further pushing on later ticks, and carries only the unpriced remainder when its orders are capped (tests/test_anchored_counting.py). Tracking "evidence not yet pushed by my own fills" generalises "evidence since my last trade" to trades that only partly push.
+- *Correlated evidence is double-counted across agents.* Two anchored agents given the same signal (LLR 0.8) push the price's log-odds to 1.6. Each assumes the price holds only others' independent information. So `price_anchored` is not a valid model for rho > 0.
+
+**Decision.** The new E1 sweeps rho under `own_signals` only. The belief-model comparison stays in F-001 (rho = 0, where the anchored model is valid).
+
+---
+
 ## Open questions
 
-- **Q1 — False news vs the MSE decomposition (D-001).** SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
+- **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
 - **Q2 — Pre-registration details.** See the "TO CONFIRM" items in `docs/PREREGISTRATION.md`.
 - **Q3 — Review date.** Not yet supplied.
-- **Q4 — Stable Foundry alongside foundry-zksync.** Option: `FOUNDRY_DIR=~/.foundry-stable foundryup` installs stable binaries to a separate directory (foundryup reads `FOUNDRY_DIR`), used by this project via a Makefile/env var. Alternatively keep using foundry-zksync's forge, which compiles standard EVM by default. Decide before Phase 2b.
-- **Q5 — Private-information aggregation (F-001).** The market as specified prices little private information. Options: keep it and report it; change how agents read the price; or change the information structure (e.g. Grossman–Stiglitz-style shared research signal). Owner decision needed before Phase 2a, because H2's mechanism depends on it.
+- **Q4 — Stable Foundry alongside foundry-zksync.** Installed: `forge Version: 1.3.5-foundry-zksync-v0.1.7` (checked 2026-10-10). Option: `FOUNDRY_DIR=~/.foundry-stable foundryup` installs stable binaries to a separate directory (foundryup reads `FOUNDRY_DIR`), used by this project via a Makefile/env var. Alternatively keep using foundry-zksync's forge, which compiles standard EVM by default. Decide before Phase 2b.
+- **Q5 — RESOLVED 2026-10-10 by D-024 (correlated signals) and D-026 (baseline calibration).** Original question: Private-information aggregation (F-001). The market as specified prices little private information. Options: keep it and report it; change how agents read the price; or change the information structure (e.g. Grossman–Stiglitz-style shared research signal). Owner decision needed before Phase 2a, because H2's mechanism depends on it.

@@ -3,6 +3,7 @@
   run CONFIG             run an experiment (all sweep points x seeds), write CSVs and charts
   plot-market CONFIG     plot one market of one seed: price vs p*_avail vs p*_full vs truth
   calibrate-costs CONFIG apply the research-cost calibration rule (DECISIONS D-017)
+  calibrate-baseline CONFIG  choose rho and the cost median by the rule in DECISIONS D-026
 """
 
 from __future__ import annotations
@@ -72,6 +73,16 @@ def cmd_calibrate_costs(args: argparse.Namespace) -> None:
     print(json.dumps(summary, indent=2))
 
 
+def cmd_calibrate_baseline(args: argparse.Namespace) -> None:
+    from tfs.experiments.baseline_calibration import calibrate
+
+    cfg = load_config(args.config)
+    count = args.seeds if args.seeds is not None else cfg.seeds.count
+    seeds = list(range(cfg.seeds.start, cfg.seeds.start + count))
+    summary = calibrate(cfg, seeds, args.workers, args.out / "baseline_calibration")
+    print(json.dumps(summary, indent=2))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m tfs")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -86,6 +97,9 @@ def main() -> None:
     run.set_defaults(func=cmd_run)
     common(cal := sub.add_parser("calibrate-costs", help="research-cost calibration (D-017)"))
     cal.set_defaults(func=cmd_calibrate_costs)
+
+    common(cb := sub.add_parser("calibrate-baseline", help="baseline rho and cost calibration (D-026)"))
+    cb.set_defaults(func=cmd_calibrate_baseline)
 
     pm = sub.add_parser("plot-market", help="plot one market of one seed")
     pm.add_argument("config", type=Path)
