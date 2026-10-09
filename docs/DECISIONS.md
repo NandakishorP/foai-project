@@ -115,6 +115,19 @@ Each term is reported as an RMS with 95% CIs; shares of truth lost are stated in
 
 ---
 
+## D-012 — FastEngine uses floating point; engine semantics
+**Date:** 2026-10-10 · **SPEC:** §3.3, §4
+
+**Decision.**
+- FastEngine's LMSR uses Python floats with log-sum-exp, not a mirror of PRBMath fixed point. The tolerance for the FastEngine ↔ EvmEngine differential test is set in Phase 2b.
+- Trades carry a limit on the *average* price and either fill completely or revert, like an on-chain slippage check.
+- `Bundle` executes several trades all-or-nothing (used by arbitrageurs now, by builders and predators later).
+- `Engine.submit(tx)` executes one transaction as its own block; `build_block(ordered_txs)` executes a block in exactly the given order, because ordering is decided by the builder.
+
+**Reason.** Floats keep the Monte Carlo engine simple and fast. Fixed-point rounding matters only for the on-chain comparison, which the differential test covers. Fill-or-revert limits make slippage protection explicit; front-running in Phase 2 depends on it.
+
+---
+
 ## Open questions
 
 - **Q1 — False news vs the MSE decomposition (D-001).** SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
