@@ -1,0 +1,17 @@
+{
+  "rule": "DECISIONS D-029",
+  "choice": {
+    "rho": 1.0,
+    "capital_ratio": 2.0,
+    "cost_unit": 6.864226617423597,
+    "multiplier": 0.25,
+    "cost_median": 1.7160566543558993,
+    "participation": 0.552,
+    "share_priced": 0.7030558190126517,
+    "share_num": 0.009266591738581865,
+    "share_den": 0.03120651062354605,
+    "feasible": true
+  },
+  "reason": "feasible; preference order D-029 (c)",
+  "n_seeds": 200
+}

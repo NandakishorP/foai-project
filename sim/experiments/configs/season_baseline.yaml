@@ -1,7 +1,7 @@
 # Season baseline (Phase 1 milestone): is research participation stable without predators?
 #
 # 30 markets per season, endogenous research (SPEC §2.1), no predators.
-# Belief model from the E1 rule (D-016). Cost scale from the calibration rule (D-017).
+# Belief model from the E1 rule (D-016). rho, informed capital and cost scale frozen by calibration D-029.
 
 extends: base.yaml
 name: season_baseline
@@ -14,5 +14,5 @@ agents:
   forecasters:
     research:
       mode: endogenous
-      cost_median: 5.45            # D-017: median gross profit of a researching forecaster
-                                   #   (results/calibrate_costs/calibration.json: 5.4486, n=2000)
+      cost_median: 1.716           # FROZEN by calibration D-029/D-030: 0.25 x the D-017 cost unit (6.864)
+                                   #   at rho = 1, capital_ratio = 2 (docs/report/calibration/D-029_round2/)

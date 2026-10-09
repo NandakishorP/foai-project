@@ -1,4 +1,5 @@
-# Research-cost calibration (DECISIONS D-017, rule fixed before any run).
+# Research-cost unit (DECISIONS D-017 procedure). Since D-029 the frozen cost median is
+# 0.25 x this unit at the frozen rho and capital_ratio; the calibration grid recomputes it.
 #
 # Base config with the belief model chosen by the E1 rule (D-016), single markets,
 # everyone researching, no predators. `python -m tfs calibrate-costs` reports the

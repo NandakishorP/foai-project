@@ -63,7 +63,8 @@ def test_negative_control_detects_leaked_information(cfg: SimConfig) -> None:
     own_signals the market absorbs little of any single forecaster's private
     information. That is the under-aggregation issue E1 measures, DECISIONS D-013.)
     """
-    cross = _cross_terms(cfg, leak=0.5)
+    # rho = 0: at rho = 1 any one researcher knows everything, so there would be nothing to leak
+    cross = _cross_terms(replace_in(cfg, "information.private.rho", 0.0), leak=0.5)
     se = cross.std(ddof=1) / math.sqrt(len(cross))
     assert cross.mean() < -3 * se, (cross.mean(), se)
 

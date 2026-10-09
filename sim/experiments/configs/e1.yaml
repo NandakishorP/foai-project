@@ -2,17 +2,20 @@
 #
 # Single markets with fixed full participation (everyone researches), so
 # p*_avail = p*_full and all truth lost is aggregation loss. Each factor is varied
-# one at a time around the base config, under both belief models
-# (DECISIONS D-013). The belief model for later phases is chosen by the
-# pre-declared rule D-016. The full sweep is reported for both models.
+# one at a time around the frozen baseline (D-029).
+#
+# Belief model: own_signals only. price_anchored double-counts correlated research
+# (D-027); its comparison with own_signals at rho = 0 is kept in F-001
+# (docs/report/findings/F-001_independent_signals/).
+# rho is a robustness dimension: rho = 0 is the F-001 information structure.
+# In the b sweep, forecaster capital scales with b (capital_ratio, D-029).
 
 extends: base.yaml
 name: e1
 
 sweep:
-  crossed:
-    agents.belief_model: [own_signals, price_anchored]
   one_at_a_time:
+    information.private.rho: [0.0, 0.25, 0.5, 0.75, 0.9, 1.0]
     agents.forecasters.count: [2, 5, 10, 20]
     information.precision_scale: [0.5, 1.0, 2.0]
     market.b_main: [30.0, 100.0, 300.0]

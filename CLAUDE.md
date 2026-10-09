@@ -40,7 +40,8 @@ An adversarial multi-agent simulation of an on-chain prediction market. Informed
 - Run an experiment: `.venv/bin/python -m tfs run sim/experiments/configs/e1.yaml` (outputs in `results/<name>/`)
 - One market plot: `.venv/bin/python -m tfs plot-market sim/experiments/configs/base.yaml --seed 1`
 - Cost calibration: `.venv/bin/python -m tfs calibrate-costs sim/experiments/configs/calibrate_costs.yaml`
-- Contract tests: `cd contracts && forge test`
+- Foundry (project-local stable v1.4.4, never the global foundry-zksync): `make foundry`, then `make foundry-version`
+- Contract tests: `cd contracts && ../.tools/foundry/bin/forge test`
 - Circuit tests: `cd circuits/sealed_order && nargo test`
 - Dashboard: `streamlit run dashboard/app.py`
 

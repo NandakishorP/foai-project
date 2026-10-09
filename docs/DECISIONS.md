@@ -329,11 +329,40 @@ The whole grid is archived and reported. The selection code is `tfs/experiments/
 
 ---
 
+## D-030 — Baseline calibration round 2 result: FROZEN
+**Date:** 2026-10-10 · Rule D-029 committed at `8087302` before the run. Full 72-point grid with numerators and denominators: `docs/report/calibration/D-029_round2/grid.csv`.
+
+**Chosen (feasible, preference order D-029 (c)):** rho = **1.0**, capital_ratio = **2.0** (bankroll 200 at b = 100), cost multiplier 0.25 × cost unit 6.864 → cost_median = **1.716**.
+- Steady-state participation 55.2%; share priced 0.703 (numerator 0.00927 / denominator 0.03121).
+- Only 2 of 72 points are feasible, both at rho = 1. The other is capital 4 (participation 51.4%, share 0.82); the preference for smaller capital picks capital 2.
+- No point with rho < 1 meets both criteria. At rho ≤ 0.9, steady-state participation stays ≤ 50% at every capital level and cost on the grid. The best rho = 0.9 points reach a share of 0.77, but at 31% participation.
+
+**Frozen in:** `base.yaml` (rho, capital_ratio) and `season_baseline.yaml` (cost_median). These values are not changed for any Phase 2 experiment.
+
+**Interpretation for the report.**
+- At rho = 1 every researcher sees the same research signal. Any single researcher makes p*_avail = p*_full, so participation loss is zero whenever at least one forecaster researches.
+- Researcher exit then mainly removes **informed capital** pushing the price toward p*_avail: the Grossman–Stiglitz channel. It shows up as aggregation loss, not participation loss. This is why H2 is judged on total truth lost (PREREGISTRATION).
+- The calibration needed rho = 1 and cheap research (a quarter of the typical gross profit) to keep participation at 50–70%. That limitation is stated in the report.
+
+---
+
+## D-031 — Project-local stable Foundry (answer to Q4)
+**Date:** 2026-10-10
+
+**Decision.**
+- Stable Foundry **v1.4.4** (the same version as the stable `anvil` already on this machine) is installed into `.tools/foundry/bin` (gitignored) by `scripts/install_foundry.sh`.
+- The script downloads and unpacks the official release tarball only. It does not run `foundryup`, write to `~/.foundry` or edit shell profiles. The `Makefile` points `FORGE`/`ANVIL`/`CAST` at `.tools/foundry/bin`; `make foundry-version` shows them.
+- Verified: a fingerprint of `~/.foundry` (SHA-256 of `bin/`, `versions/`, `share/`, `keystores/`; path, size and mtime of every file in `anvil/` and `cache/`) plus `~/.zshrc`, `~/.zprofile` and `~/.profile` is identical before and after the install (36,397 entries). Global `forge` is still `1.3.5-foundry-zksync-v0.1.7`.
+
+**Reason.** The owner uses foundry-zksync globally for another project.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
 - **Q2 — Pre-registration details.** See the "TO CONFIRM" items in `docs/PREREGISTRATION.md`.
-- **Q3 — Review date.** Not yet supplied.
-- **Q4 — Stable Foundry alongside foundry-zksync.** Installed: `forge Version: 1.3.5-foundry-zksync-v0.1.7` (checked 2026-10-10). Option: `FOUNDRY_DIR=~/.foundry-stable foundryup` installs stable binaries to a separate directory (foundryup reads `FOUNDRY_DIR`), used by this project via a Makefile/env var. Alternatively keep using foundry-zksync's forge, which compiles standard EVM by default. Decide before Phase 2b.
+- **Q3 — Review date.** Not yet supplied (placeholder text received twice).
+- **Q4 — RESOLVED 2026-10-10 by D-031 (project-local install).** Global install: `forge Version: 1.3.5-foundry-zksync-v0.1.7` (checked 2026-10-10). Option: `FOUNDRY_DIR=~/.foundry-stable foundryup` installs stable binaries to a separate directory (foundryup reads `FOUNDRY_DIR`), used by this project via a Makefile/env var. Alternatively keep using foundry-zksync's forge, which compiles standard EVM by default. Decide before Phase 2b.
 - **Q5 — RESOLVED 2026-10-10 by D-024 (correlated signals) and D-026 (baseline calibration).** Original question: Private-information aggregation (F-001). The market as specified prices little private information. Options: keep it and report it; change how agents read the price; or change the information structure (e.g. Grossman–Stiglitz-style shared research signal). Owner decision needed before Phase 2a, because H2's mechanism depends on it.
 - **Q6 — RESOLVED 2026-10-10 by D-029** (add informed capital to the calibration; fallback rule).

@@ -27,7 +27,7 @@ def _charts(result: ExperimentResult, config_path: Path) -> list[Path]:
     ofat = list(sweep.get("one_at_a_time") or {})
     written = []
     if ofat and len(crossed) <= 1:
-        group_by = crossed[0] if crossed else "point"
+        group_by = crossed[0] if crossed else None
         written.append(plots.plot_ofat(result.summary, ofat, group_by, f"{result.name}: one factor at a time",
                                        result.out_dir / f"{result.name}_sweeps.png"))
     if result.points[0].config.season.n_markets > 1:

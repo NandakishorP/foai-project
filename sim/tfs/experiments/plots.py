@@ -133,6 +133,13 @@ def plot_season(per_market: Sequence[dict[str, Any]], title: str, path: Path) ->
 # E1: one-factor-at-a-time sweeps, both belief models, 95% CIs
 # --------------------------------------------------------------------------- #
 
+PARAM_TITLES = {
+    "agents.forecasters.count": "informed forecasters",
+    "information.private.rho": "research correlation ρ",
+    "information.precision_scale": "signal precision (×)",
+    "market.b_main": "LMSR depth b",
+}
+
 E1_METRICS = [
     ("truth_rms", "truth lost (RMS)"),
     ("brier_final", "Brier score at close"),
@@ -143,7 +150,7 @@ E1_METRICS = [
 def plot_ofat(
     summary: Sequence[dict[str, Any]],
     swept: Sequence[str],
-    group_by: str,
+    group_by: str | None,
     title: str,
     path: Path,
     metrics: Sequence[tuple[str, str]] = E1_METRICS,
@@ -154,6 +161,9 @@ def plot_ofat(
     are at baseline are used, i.e. the baseline point plus that parameter's
     own variations.
     """
+    if group_by is None:  # a single series: tag every row with one shared group
+        summary = [{**row, "_group": "all"} for row in summary]
+        group_by = "_group"
     groups = list(dict.fromkeys(row[group_by] for row in summary))
     fig, axes = _figure(len(metrics), len(swept), (3.3 * len(swept), 2.5 * len(metrics)))
     baseline = {row[group_by]: row for row in summary if row["point"].endswith("baseline")}
@@ -171,15 +181,15 @@ def plot_ofat(
                             markersize=5, capsize=2, label=str(group))
                 ax.set_xticks(np.arange(len(rows)), [_fmt(row[param]) for row in rows])
             if r == 0:
-                ax.set_title(param.split(".")[-1] if param != "agents.forecasters.count" else "informed forecasters",
-                             fontsize=9, loc="left")
+                ax.set_title(PARAM_TITLES.get(param, param.split(".")[-1]), fontsize=9, loc="left")
             if c == 0:
                 ax.set_ylabel(label, fontsize=8)
-    handles, labels = axes[0, 0].get_legend_handles_labels()
-    legend = fig.legend(handles, labels, loc="upper right", ncols=len(groups), frameon=False, fontsize=8,
-                        title=group_by.split(".")[-1], title_fontsize=8)
-    for text in legend.get_texts():
-        text.set_color(INK_SECONDARY)
+    if len(groups) > 1:  # one series needs no legend: the title names it
+        handles, labels = axes[0, 0].get_legend_handles_labels()
+        legend = fig.legend(handles, labels, loc="upper right", ncols=len(groups), frameon=False, fontsize=8,
+                            title=group_by.split(".")[-1], title_fontsize=8)
+        for text in legend.get_texts():
+            text.set_color(INK_SECONDARY)
     fig.suptitle(title, x=0.01, ha="left", fontsize=11, color=INK)
     fig.text(0.01, 0.005, "error bars: 95% CI across seeds", fontsize=7, color=MUTED)
     return _save(fig, path)
