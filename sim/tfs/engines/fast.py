@@ -28,8 +28,10 @@ class FastEngine(Engine):
     most b·ln 2 per venue.
 
     Fees: every included trade pays `base_fee` plus its own `priority_fee` to
-    the builder, even if the trade then reverts (as gas is paid on-chain). An
-    atomic `Bundle` that reverts is not included, so it pays nothing.
+    the builder, even if the trade then reverts (as gas is paid on-chain).
+    Two exceptions pay nothing when they revert, because they are not included:
+    an atomic `Bundle`, and a `revert_protected` trade (how searchers submit
+    front-runs to builders).
     """
 
     def __init__(
@@ -119,12 +121,17 @@ class FastEngine(Engine):
         market = self._venues[trade.venue]
         before = market.price()
 
+        fee = self.base_fee + trade.priority_fee
+
         def revert(reason: str) -> Receipt:
+            if trade.revert_protected:  # dropped from the block: the fee is returned
+                acct.cash += fee
+                self._accounts[BUILDER_ID].cash -= fee
             return Receipt(trade=trade, ok=False, reason=reason, cost=0.0, price_before=before, price_after=before)
 
-        fee = self.base_fee + trade.priority_fee
         if fee > acct.cash + _EPS:
-            return revert("insufficient cash for fee")
+            return Receipt(trade=trade, ok=False, reason="insufficient cash for fee", cost=0.0,
+                           price_before=before, price_after=before)
         acct.cash -= fee  # paid on inclusion, whether or not the trade then reverts
         self._accounts[BUILDER_ID].cash += fee
 

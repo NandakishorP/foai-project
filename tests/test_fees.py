@@ -46,3 +46,12 @@ def test_zero_fees_change_nothing() -> None:
 def test_builder_id_is_reserved() -> None:
     with pytest.raises(EngineError):
         FastEngine(LIQ, {BUILDER_ID: 1.0})
+
+
+def test_revert_protected_trade_pays_nothing_when_it_reverts() -> None:
+    e = FastEngine(LIQ, {"p": 100.0}, base_fee=0.05)
+    [r] = e.submit(Trade("p", Venue.MAIN, Side.YES, 50.0, limit_price=0.51, priority_fee=0.3, revert_protected=True))
+    assert not r.ok
+    assert e.builder_revenue() == 0.0 and e.balances()["p"].cash == 100.0
+    [ok] = e.submit(Trade("p", Venue.MAIN, Side.YES, 5.0, 1.0, priority_fee=0.3, revert_protected=True))
+    assert ok.ok and e.builder_revenue() == pytest.approx(0.35)

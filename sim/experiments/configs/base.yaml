@@ -91,6 +91,27 @@ agents:
     min_profit: 0.05      # ignore gaps worth less than 5 cents
     slippage: 0.02        # tolerance on each leg's average price
 
+  predators:              # MEV predator (SPEC §6). Reference values fixed before any E2 run (PREREGISTRATION rule 5).
+    count: 0              # no predators in the baseline; E2a/E2b set the reference of 1 and sweep {1, 2, 4}
+    latency: 0.2          # reads a pending tx if it arrives in the first 80% of the block interval:
+                          #   fast but not omniscient; the middle of the E2a sweep {0.05, 0.2, 0.5}
+    capital_ratio: 2.0    # bankroll = 2 x b_main: as well funded as one informed forecaster (D-030)
+    horizon: 10           # H ticks. Researchers push the shared signal in over several ticks (max_order 20
+                          #   = 0.2 log-odds per tick each); public news arrives about every 20 ticks. So 10 ticks
+                          #   capture order-flow continuation and stay shorter than the gap between news items.
+    markout_threshold: 0.0  # success = "the price kept moving the trade's way at all". Noise trades succeed
+                          #   ~half the time, matching the Beta(1,1) prior mean, so P(informed) = 2θ − 1
+    drift_ema_alpha: 0.1  # E[drift | informed] averages the last ~10 informed markouts
+    bid_share: 0.5        # bids half its expected gross profit to the builder for the front slot
+    min_profit: 0.01      # one cent
+    slippage: 0.01        # tolerance on the front-run's average price (same scale as the arbitrageur's)
+    own_impact_reversion: 1.0  # its own front-run carries no information, so informed traders, the public-news
+                          #   trader and the arbitrageur push it back within H ticks; it expects to exit with
+                          #   its own impact undone (the victim's impact and the informed drift remain).
+                          #   Without this, LMSR convexity makes "buy as much as possible" look profitable.
+    back_run: false       # reference predator holds H ticks to ride the informed drift (SPEC §6: front-runs,
+                          #   back-running optional); the sandwich variant is reported in E2a
+
   trend:
     count: 2
     fast_span: 5          # classic fast/slow EMA crossover

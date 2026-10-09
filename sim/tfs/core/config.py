@@ -140,6 +140,23 @@ class TrendConfig:
 
 
 @dataclass(frozen=True)
+class PredatorConfig:
+    """MEV predator (SPEC §6). Reference values and their rationale are in base.yaml (PREREGISTRATION rule 5)."""
+
+    count: int
+    latency: float  # fraction of the block interval before it can read a pending transaction
+    capital_ratio: float  # bankroll / b_main
+    horizon: int  # H: ticks of the markout window; positions are unwound at H + 1
+    markout_threshold: float  # log-odds continuation that counts as "the price kept moving my way"
+    drift_ema_alpha: float  # EMA weight for E[drift | informed]
+    bid_share: float  # share of the expected gross profit bid to the builder
+    min_profit: float  # minimum expected net profit (USDC) worth acting on
+    slippage: float  # tolerance on the front-run's average price
+    own_impact_reversion: float  # share of its own front-run impact it expects the market to undo before it unwinds
+    back_run: bool  # False: hold H ticks then unwind; True: sell right after the victim (sandwich)
+
+
+@dataclass(frozen=True)
 class AgentsConfig:
     belief_model: BeliefModel  # how informed agents read the price (DECISIONS D-013)
     forecasters: ForecasterConfig
@@ -149,6 +166,7 @@ class AgentsConfig:
     noise_ref: NoiseConfig
     arbitrageurs: ArbitrageConfig
     trend: TrendConfig
+    predators: PredatorConfig
 
 
 @dataclass(frozen=True)
@@ -237,6 +255,10 @@ def _convert(tp: Any, value: Any, path: str) -> Any:
         if not isinstance(value, list):
             raise ConfigError(f"{path}: expected a list")
         return tuple(_convert(args[0], item, f"{path}[{i}]") for i, item in enumerate(value))
+    if tp is bool:
+        if not isinstance(value, bool):
+            raise ConfigError(f"{path}: expected true or false, got {value!r}")
+        return value
     if tp is float:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ConfigError(f"{path}: expected a number, got {value!r}")

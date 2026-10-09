@@ -22,6 +22,7 @@ from tfs.agents.base import Agent, Observation
 from tfs.agents.beliefs import make_belief
 from tfs.agents.forecaster import InformedForecaster
 from tfs.agents.noise import NoiseTrader
+from tfs.agents.predator import Predator, PredatorMemory
 from tfs.agents.public_news import PublicNewsTrader
 from tfs.agents.trend import TrendFollower
 from tfs.core.config import SimConfig
@@ -34,10 +35,10 @@ from tfs.core.information import (
     p_star_full,
 )
 from tfs.core.rng import RngFactory
-from tfs.core.types import Receipt, Tx, Venue
+from tfs.core.types import Bundle, Receipt, Trade, Tx, Venue
 from tfs.engines.fast import FastEngine
-from tfs.mempool.builder import FeeBuilder
-from tfs.mempool.mempool import Mempool, MempoolPolicy
+from tfs.mempool.builder import BlockPlan, FeeBuilder, FrontRunRequest
+from tfs.mempool.mempool import Mempool, MempoolPolicy, PendingTx
 
 
 # --------------------------------------------------------------------------- #
@@ -46,9 +47,17 @@ from tfs.mempool.mempool import Mempool, MempoolPolicy
 
 
 def build_agents(
-    cfg: SimConfig, rngs: RngFactory, market: int, traits: Sequence[ForecasterTraits], researchers: frozenset[int]
+    cfg: SimConfig,
+    rngs: RngFactory,
+    market: int,
+    traits: Sequence[ForecasterTraits],
+    researchers: frozenset[int],
+    predator_memories: Sequence[PredatorMemory] = (),
 ) -> list[Agent]:
-    """Create every agent trading in this market. Non-researching forecasters do not take part (D-014)."""
+    """Create every agent trading in this market. Non-researching forecasters do not take part (D-014).
+
+    Predators get the memory they carry across the season (D-033 amendment 4).
+    """
     a = cfg.agents
     b = {Venue.MAIN: cfg.market.b_main, Venue.REF: cfg.market.b_ref}
     prior_logodds = float(np.log(cfg.market.prior / (1.0 - cfg.market.prior)))
@@ -110,6 +119,12 @@ def build_agents(
                 f"trend_{j}", tc.fast_span, tc.slow_span, tc.threshold, tc.order_size, tc.max_position, tc.bankroll
             )
         )
+
+    memories = list(predator_memories) or [PredatorMemory() for _ in range(a.predators.count)]
+    if len(memories) != a.predators.count:
+        raise ValueError("one memory per predator is required")
+    for j, memory in enumerate(memories):
+        agents.append(Predator(f"predator_{j}", b[Venue.MAIN], a.predators, memory, cfg.market.ticks, cfg.mempool.base_fee))
     return agents
 
 
@@ -136,6 +151,9 @@ class MarketRecord:
     mm_pnl: dict[Venue, float]
     executed: int  # trades that filled
     reverted: int  # trades that reverted
+    builder_revenue: float  # fees and tips collected by the builder
+    frontruns: int  # predator front-runs that filled
+    victim_reverts: int  # victims that reverted after being front-run
 
     def forecaster_pnl(self) -> dict[int, float]:
         """Gross trading PnL of each researching forecaster, by forecaster index."""
@@ -149,15 +167,40 @@ def _visible_public_llr(tape: SignalTape, tick: int, latency: int | None) -> flo
     return float(tape.public_llr[tick - latency])
 
 
+@dataclass(frozen=True)
+class BlockTrace:
+    """Everything that happened in one block (recorded only for replays)."""
+
+    tick: int
+    pending: list[PendingTx]
+    visible: dict[str, set[int]]  # predator id -> tx_ids it could read
+    plan: BlockPlan
+    receipts: list[Receipt]
+    price_before: float
+    price_after: float
+
+
+def _receipts_by_trade(txs: Sequence[Tx], receipts: Sequence[Receipt]) -> dict[int, Receipt]:
+    """Map id(trade) -> its receipt. A Bundle produces one receipt per trade, in order."""
+    flat: list[Trade] = []
+    for tx in txs:
+        flat.extend(tx.trades if isinstance(tx, Bundle) else [tx])
+    return {id(t): r for t, r in zip(flat, receipts)}
+
+
 def run_market(
     cfg: SimConfig,
     rngs: RngFactory,
     market: int,
     traits: Sequence[ForecasterTraits],
     researchers: frozenset[int],
+    predator_memories: Sequence[PredatorMemory] = (),
+    trace: list[BlockTrace] | None = None,
 ) -> MarketRecord:
     tape = generate_tape(cfg, rngs, market)
-    agents = build_agents(cfg, rngs, market, traits, researchers)
+    agents = build_agents(cfg, rngs, market, traits, researchers, predator_memories)
+    traders = [a for a in agents if not isinstance(a, Predator)]
+    predators = [a for a in agents if isinstance(a, Predator)]
     engine = FastEngine(
         {Venue.MAIN: cfg.market.b_main, Venue.REF: cfg.market.b_ref},
         {agent.agent_id: agent.bankroll for agent in agents},
@@ -169,34 +212,64 @@ def run_market(
     ticks = cfg.market.ticks
     price_main, price_ref = np.empty(ticks), np.empty(ticks)
     pending_receipts: dict[str, list[Receipt]] = defaultdict(list)
+    last_block: tuple[Receipt, ...] = ()
     own_private_llr = tape.own_private_llr  # what each forecaster can infer from its own research
-    executed = reverted = 0
+    executed = reverted = frontruns = victim_reverts = 0
 
     for tick in range(ticks):
         prices = engine.prices()
         balances = engine.balances()
-        txs: list[Tx] = []
-        for agent in agents:
-            private = 0.0 if agent.private_source is None else float(own_private_llr[agent.private_source, tick])
-            agent.perceive(
-                Observation(
-                    tick=tick,
-                    prices=prices,
-                    public_llr=_visible_public_llr(tape, tick, agent.public_latency),
-                    private_llr=private,
-                    account=balances[agent.agent_id],
-                    receipts=tuple(pending_receipts.pop(agent.agent_id, ())),
-                )
-            )
-            txs.extend(agent.act())
 
-        plan = builder.order(mempool.admit(txs))
-        for receipt in engine.build_block(plan.txs):
+        def observation(agent: Agent, visible: tuple[PendingTx, ...] = ()) -> Observation:
+            private = 0.0 if agent.private_source is None else float(own_private_llr[agent.private_source, tick])
+            return Observation(
+                tick=tick,
+                prices=prices,
+                public_llr=_visible_public_llr(tape, tick, agent.public_latency),
+                private_llr=private,
+                account=balances[agent.agent_id],
+                receipts=tuple(pending_receipts.pop(agent.agent_id, ())),
+                mempool=visible,
+                last_block=last_block,
+            )
+
+        # 1-2. Traders act; their transactions enter the mempool with arrival times.
+        txs: list[Tx] = []
+        for agent in traders:
+            agent.perceive(observation(agent))
+            txs.extend(agent.act())
+        pending = mempool.admit(txs)
+
+        # 3. Predators read what their latency allows and respond within the same block.
+        requests: list[FrontRunRequest] = []
+        late: list[Tx] = []
+        visible_ids: dict[str, set[int]] = {}
+        for predator in predators:
+            visible = tuple(mempool.visible_to(pending, predator.latency))
+            visible_ids[predator.agent_id] = {p.tx_id for p in visible}
+            predator.perceive(observation(predator, visible))
+            late.extend(predator.act())
+            request = predator.front_run_request()
+            if request is not None:
+                requests.append(request)
+
+        # 4-5. The builder orders the block; the engine executes it.
+        plan = builder.order(pending, requests, late)
+        receipts = engine.build_block(plan.txs)
+        for receipt in receipts:
             pending_receipts[receipt.trade.agent_id].append(receipt)
             executed += receipt.ok
             reverted += not receipt.ok
+        by_trade = _receipts_by_trade(plan.txs, receipts)
+        for request, victim in plan.placements:
+            if by_trade[id(request.front)].ok:
+                frontruns += 1
+                victim_reverts += not by_trade[id(victim.tx)].ok
+        last_block = tuple(receipts)
 
         after = engine.prices()
+        if trace is not None:
+            trace.append(BlockTrace(tick, pending, visible_ids, plan, receipts, prices[Venue.MAIN], after[Venue.MAIN]))
         price_main[tick], price_ref[tick] = after[Venue.MAIN], after[Venue.REF]
 
     engine.resolve(tape.y)
@@ -216,6 +289,9 @@ def run_market(
         mm_pnl=engine.market_maker_pnl(),
         executed=executed,
         reverted=reverted,
+        builder_revenue=engine.builder_revenue(),
+        frontruns=frontruns,
+        victim_reverts=victim_reverts,
     )
 
 
@@ -274,10 +350,11 @@ def run_season(cfg: SimConfig, seed: int) -> SeasonRecord:
     rngs = RngFactory(seed)
     traits = draw_forecaster_traits(cfg, rngs)
     memory = ResearchMemory(ema=[None] * len(traits), alpha=cfg.agents.forecasters.research.ema_alpha)
+    predator_memories = [PredatorMemory() for _ in range(cfg.agents.predators.count)]  # persist across markets
     season = SeasonRecord(seed=seed, traits=traits)
     for market in range(cfg.season.n_markets):
         researchers = decide_research(cfg, traits, memory, rngs, market)
-        record = run_market(cfg, rngs, market, traits, researchers)
+        record = run_market(cfg, rngs, market, traits, researchers, predator_memories)
         for index, gross in record.forecaster_pnl().items():
             memory.update(index, gross)
         season.markets.append(record)

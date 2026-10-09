@@ -398,6 +398,35 @@ The remaining predator parameters (markout threshold, H, drift-EMA decay, warm-u
 
 ---
 
+## D-034 — Predator agent and its reference parameters (fixed before any E2 run; PREREGISTRATION rule 5)
+**Date:** 2026-10-10 · Code: `sim/tfs/agents/predator.py`. Values and per-line rationale: `base.yaml` → `agents.predators`. E2a/E2b use them with `count: 1` as the reference.
+
+**Reference parameters.**
+
+| Parameter | Value | Rationale |
+|---|---|---|
+| latency | 0.2 | Reads a pending transaction if it arrives in the first 80% of the block interval. Middle of the E2a sweep {0.05, 0.2, 0.5}. |
+| capital_ratio | 2.0 | As well funded as one informed forecaster (D-030). |
+| horizon H | 10 ticks | Researchers push the shared signal in over several ticks; public news arrives about every 20 ticks. 10 ticks capture order-flow continuation and stay shorter than the gap between news items. |
+| markout_threshold | 0.0 | "The price kept moving my way at all". Noise trades succeed about half the time, which equals the Beta(1, 1) prior mean, so P(informed) = 2θ − 1. |
+| drift_ema_alpha | 0.1 | E[drift \| informed] averages the last ~10 informed markouts. |
+| bid_share | 0.5 | Half the expected gross profit goes to the builder. |
+| min_profit | 0.01 | One cent. |
+| slippage | 0.01 | Same scale as the arbitrageur's. |
+| own_impact_reversion | 1.0 | See below. |
+| back_run | false | Reference predator holds to ride informed drift (SPEC §6: back-running optional). The sandwich variant is reported. |
+| warm-up | 5 markets | Already in PREREGISTRATION: H1 scored on markets 6–30. With ~500–900 executed trades per market across ~23 addresses, each active forecaster contributes dozens of markouts per market, so after 5 markets each posterior rests on ≳ 75 observations (sd of θ ≲ 0.06). |
+
+**Design changes found while debugging (one seed, 6–8 markets, research forced on; functional checks only, no paired comparison, no E2 run).**
+1. **Revert protection.** The predator's own transactions are dropped, and pay no tip, if they would revert, as searchers' bundles are (`Trade.revert_protected`). Without it, failed front-runs still paid their bids and the predator bled its whole bankroll.
+2. **Slot pricing.** The predator prices its front-run at the victim's slot. It replays the visible transactions ordered ahead of the victim; each moves the price only if its own limit allows. With rho = 1 all researchers trade the same way in the same block, so the block-start price was stale: front-runs reverted on their limits, or pushed victims past theirs. After the fix, no victim reverted in the checks.
+3. **`own_impact_reversion` (new parameter, r = 1).** The hold-variant EV first assumed the predator's own front-run impact persists until it unwinds. In an LMSR the round trip then looks increasingly profitable with size (convexity), and the predator round-tripped thousands of shares at a loss. Its own trade carries no information, so informed traders, the public-news trader and the arbitrageur push it back within H ticks. The reference predator therefore expects to exit with its own impact undone, keeping the victim's impact and the informed drift. The sandwich variant needs no such assumption.
+4. **No positions it cannot unwind:** no new front-runs once fewer than H + 2 ticks remain in the market.
+
+**Tests (owner amendments).** Noise traders' posterior stays at the prior mean (|θ − 0.5| < 0.08) while the informed trader's rises (θ > 0.7). The predator's own trades inside a markout window are subtracted. EV equals realised PnL exactly in three deterministic no-news cases: sandwich; hold in a frozen market with r = 0; hold with r = 1 where another agent undoes the predator's impact. Also tested: front-runs never make the victim revert (property test); no trade when costs exceed EV; slot replay.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

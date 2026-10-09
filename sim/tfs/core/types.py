@@ -36,6 +36,7 @@ class Trade:
     shares: float
     limit_price: float
     priority_fee: float = 0.0  # tip to the block builder (USDC), paid if the trade is included
+    revert_protected: bool = False  # searcher-style protection: if it reverts it is dropped and pays no fees
 
 
 @dataclass(frozen=True)
