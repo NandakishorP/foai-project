@@ -375,6 +375,29 @@ The whole grid is archived and reported. The selection code is `tfs/experiments/
 
 ---
 
+## D-033 — Phase 2a design and owner amendments (before any E2 run)
+**Date:** 2026-10-10 · Phase 2a plan approved with four amendments.
+
+**Design.**
+- A mempool stamps each transaction with an arrival time in the block.
+  - PUBLIC visibility: an observer with latency ℓ sees a pending transaction iff arrival + ℓ < 1.
+  - Arrival times are rank-based on the same seeded permutation the Phase 1 builder used. With no predators the block order is unchanged.
+- A fee-ordered builder places predator front-runs (and optional back-runs) immediately around their victim; one bundle per victim, highest bid wins.
+  - Placement is **not atomic** with the victim (priority-gas-auction style). A front-run can fill while its victim later reverts, at the predator's risk.
+  - This is a simplification of the plan's "Flashbots bundle" wording, made so the victim's transaction is never held hostage to the predator's bundle.
+- An MEV predator agent keeps a per-address Beta posterior and an EV-maximising front-run size.
+- Statistics: paired bootstrap; verdict code follows PREREGISTRATION exactly.
+
+**Owner amendments.**
+1. **Markouts start at the post-trade price** (after the victim's execution) and run to the price H ticks later, measured in log-odds. The predator's own trades inside a window are subtracted exactly: LMSR log-odds impacts are additive. It also unwinds at H+1, outside the window. Test: noise traders' posterior mean stays near the prior while an informed trader's rises.
+2. **EV is net of the exit.** The LMSR slippage of the unwind (hold) or back-run (sandwich) is in the EV. Property test: EV equals realised PnL in a deterministic no-news scenario.
+3. **`base_fee = 0`** in the reference configuration, so the 0-predator twin matches D-030 and Phase 1 exactly. The fee stays as a config option only. Regression: a digest of prices, PnL and researchers for 3 seeds × 4 markets of the season baseline, taken at `b803d95` before any Phase 2a code (`d99b9b2c…`), must be reproduced with zero predators.
+4. **E2a uses 30-market seasons with research forced on.** H1 is scored on markets 6–30 after a 5-market warm-up. Predator beliefs persist across markets in E2a and E2b. PREREGISTRATION amended accordingly.
+
+The remaining predator parameters (markout threshold, H, drift-EMA decay, warm-up length, latency, bid share, capital) are fixed with rationale in the commit that adds the predator (PREREGISTRATION rule 5).
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

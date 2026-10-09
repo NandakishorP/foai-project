@@ -8,7 +8,7 @@
 - Belief model `own_signals`. No-predator steady-state participation 55%; share of research information priced 0.70.
 - None of these values change for E2a or E2b.
 
-Any change to this file after an E2 run has started is logged in `docs/DECISIONS.md` and disclosed in the report, with the reason.
+**Amendments (all before any E2 run):** D-033 (E2a design, predator memory). Any change to this file after an E2 run has started is logged in `docs/DECISIONS.md` and disclosed in the report, with the reason.
 
 ---
 
@@ -27,9 +27,9 @@ Any change to this file after an E2 run has started is logged in `docs/DECISIONS
 
 *With a fixed set of informed traders, front-running mostly redistributes profit from informed traders to predators, and truth lost rises only modestly.*
 
-**Measured on:** the first market of each season. Everyone researches there (optimistic start, D-020), so participation is fixed and identical with and without predators.
+**Measured on (amended 2026-10-10, before any E2 run, D-033):** 30-market seasons with research **forced on** (`research.mode: always`), so participation is fixed at 100% with and without predators. Predator beliefs about addresses persist across the season, because addresses are stable. H1 is scored on **markets 6–30**; markets 1–5 are a warm-up in which the predator learns who is informed. (Originally: the first market of each season, which would have scored a predator that had not yet learned anything.)
 
-- **Leakage ratio** L = 1 − Σ_seeds informed PnL (predators) / Σ_seeds informed PnL (no predators): the share of the informed traders' no-predator edge that is lost when predators are present. Predator PnL is reported next to it, to show where the edge went.
+- **Leakage ratio** L = 1 − Σ informed PnL (predators) / Σ informed PnL (no predators), summed over seeds and scored markets: the share of the informed traders' (forecasters') no-predator edge that is lost when predators are present. Predator PnL is reported next to it, to show where the edge went.
 - **Δ1** = relative change in truth-lost RMS, predators vs paired baseline (rule 4).
 
 | Verdict | Condition |
@@ -44,7 +44,7 @@ Any change to this file after an E2 run has started is logged in `docs/DECISIONS
 
 *When forecasters choose each market whether research is worth its cost, predators shrink research participation, and truth lost rises sharply.*
 
-**Measured on:** the **final stretch**, markets 21–30 of 30-market seasons (the calibration steady state, D-026/D-029), endogenous research.
+**Measured on:** the **final stretch**, markets 21–30 of 30-market seasons (the calibration steady state, D-026/D-029), endogenous research. Predator beliefs persist across the season (amendment D-033).
 
 - **Participation gap** G = participation (no predators) − participation (predators), in percentage points, pooled over the final stretch.
 - **Δ2** = relative change in truth-lost RMS over the final stretch, predators vs paired baseline (rule 4).
