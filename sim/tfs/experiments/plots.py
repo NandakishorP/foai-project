@@ -123,7 +123,7 @@ def plot_season(per_market: Sequence[dict[str, Any]], title: str, path: Path) ->
                      labels=["aggregation loss", "participation loss"], edgecolor=SURFACE, linewidth=1.0)
     bottom.set_ylabel("MSE vs p*_full")
     bottom.set_xlabel("market in season")
-    legend = bottom.legend(loc="upper right", fontsize=8, frameon=False)
+    legend = bottom.legend(loc="lower right", bbox_to_anchor=(1.0, 1.0), ncols=2, fontsize=8, frameon=False)
     for text in legend.get_texts():
         text.set_color(INK_SECONDARY)
     return _save(fig, path)
