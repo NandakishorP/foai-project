@@ -12,6 +12,8 @@ from tfs.market.lmsr import LmsrMarket
 # Floating-point slack when comparing an average price to a limit, or holdings to a sale.
 _EPS = 1e-9
 
+BUILDER_ID = "builder"  # account that receives transaction fees and tips
+
 
 class EngineError(RuntimeError):
     """A programming error (e.g. unknown agent), as opposed to a reverted trade."""
@@ -20,14 +22,25 @@ class EngineError(RuntimeError):
 class FastEngine(Engine):
     """Executes trades against one LMSR per venue and keeps agent accounts.
 
-    Collateral is conserved: cash moves only between agent accounts and the
-    venues' collateral, until resolution pays winning shares out of collateral.
-    The market maker covers any shortfall, at most b·ln 2 per venue.
+    Collateral is conserved: cash moves only between agent accounts, the
+    builder's account (fees) and the venues' collateral, until resolution pays
+    winning shares out of collateral. The market maker covers any shortfall, at
+    most b·ln 2 per venue.
+
+    Fees: every included trade pays `base_fee` plus its own `priority_fee` to
+    the builder, even if the trade then reverts (as gas is paid on-chain). An
+    atomic `Bundle` that reverts is not included, so it pays nothing.
     """
 
-    def __init__(self, liquidity: Mapping[Venue, float], initial_cash: Mapping[str, float]) -> None:
+    def __init__(
+        self, liquidity: Mapping[Venue, float], initial_cash: Mapping[str, float], base_fee: float = 0.0
+    ) -> None:
+        if BUILDER_ID in initial_cash:
+            raise EngineError(f"{BUILDER_ID!r} is reserved for the block builder")
         self._venues = {venue: LmsrMarket(b=b) for venue, b in liquidity.items()}
         self._accounts = {agent: Account(cash=cash) for agent, cash in initial_cash.items()}
+        self._accounts[BUILDER_ID] = Account(cash=0.0)
+        self.base_fee = base_fee
         self._block = 0
         self._resolved: int | None = None
         self._mm_pnl: dict[Venue, float] = {}
@@ -89,6 +102,10 @@ class FastEngine(Engine):
     def liquidity(self, venue: Venue) -> float:
         return self._venues[venue].b
 
+    def builder_revenue(self) -> float:
+        """Total fees and tips collected by the builder so far."""
+        return self._accounts[BUILDER_ID].cash
+
     # ------------------------------------------------------------------ internals
 
     def _account(self, agent_id: str) -> Account:
@@ -104,6 +121,12 @@ class FastEngine(Engine):
 
         def revert(reason: str) -> Receipt:
             return Receipt(trade=trade, ok=False, reason=reason, cost=0.0, price_before=before, price_after=before)
+
+        fee = self.base_fee + trade.priority_fee
+        if fee > acct.cash + _EPS:
+            return revert("insufficient cash for fee")
+        acct.cash -= fee  # paid on inclusion, whether or not the trade then reverts
+        self._accounts[BUILDER_ID].cash += fee
 
         if trade.shares == 0:
             return revert("zero size")
@@ -132,13 +155,13 @@ class FastEngine(Engine):
         if any(t.agent_id != bundle.agent_id for t in bundle.trades):
             raise EngineError("bundle trades must belong to the bundle's agent")
         saved_venues = copy.deepcopy(self._venues)
-        saved_account = self._account(bundle.agent_id).copy()
+        saved_accounts = {aid: self._account(aid).copy() for aid in (bundle.agent_id, BUILDER_ID)}
         receipts = []
         for trade in bundle.trades:
             receipt = self._execute_trade(trade)
             if not receipt.ok:
                 self._venues = saved_venues
-                self._accounts[bundle.agent_id] = saved_account
+                self._accounts.update(saved_accounts)  # not included: no fees either
                 return [self._reverted(t, f"bundle reverted: {receipt.reason}") for t in bundle.trades]
             receipts.append(receipt)
         return receipts

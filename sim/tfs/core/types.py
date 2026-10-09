@@ -35,6 +35,7 @@ class Trade:
     side: Side
     shares: float
     limit_price: float
+    priority_fee: float = 0.0  # tip to the block builder (USDC), paid if the trade is included
 
 
 @dataclass(frozen=True)
@@ -55,7 +56,7 @@ class Receipt:
     trade: Trade
     ok: bool
     reason: str  # "" when ok, else why it reverted
-    cost: float  # cash paid by the agent (negative = cash received); 0 if reverted
+    cost: float  # cash paid by the agent for shares (negative = cash received); 0 if reverted; excludes fees
     price_before: float
     price_after: float
 
