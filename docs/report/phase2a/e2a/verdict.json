@@ -1,0 +1,24 @@
+{
+  "hypothesis": "H1",
+  "verdict": "partly supported",
+  "reference_point": "agents.predators.count=1|baseline",
+  "scored_markets": "6-30",
+  "statistics": {
+    "delta_truth_rms": {
+      "point": 0.0343169618375887,
+      "lo": 0.03155650603744141,
+      "hi": 0.037359532667955754
+    },
+    "leakage": {
+      "point": 0.12991220913862433,
+      "lo": 0.12259739156501995,
+      "hi": 0.13767619156457486
+    },
+    "participation_gap_pp": {
+      "point": 0.0,
+      "lo": 0.0,
+      "hi": 0.0
+    }
+  },
+  "rule": "docs/PREREGISTRATION.md (strict CI rule; paired bootstrap, 10,000 resamples, seed 0)"
+}

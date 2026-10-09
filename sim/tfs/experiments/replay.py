@@ -68,8 +68,8 @@ def plot_block(record: MarketRecord, block: BlockTrace, title: str, path: Path) 
                  textcoords="offset points", fontsize=8, color=plots.MUTED)
     top.set_ylim(0, 1)
     top.set_ylabel("P(YES)")
-    top.set_title(title, loc="left", fontsize=11)
-    legend = top.legend(loc="lower left", fontsize=8, frameon=False, ncols=2)
+    top.set_title(title, loc="left", fontsize=11, pad=22)
+    legend = top.legend(loc="lower center", bbox_to_anchor=(0.5, 1.0), fontsize=8, frameon=False, ncols=2)
     for text in legend.get_texts():
         text.set_color(plots.INK_SECONDARY)
 
@@ -94,19 +94,16 @@ def plot_block(record: MarketRecord, block: BlockTrace, title: str, path: Path) 
 
 
 def replay(cfg: SimConfig, seed: int, market: int, out_dir: Path) -> tuple[Path, Path]:
-    """Re-run the season, trace `market`, and explain its first block with a filled front-run."""
+    """Re-run the season, trace `market`, and explain its block with the largest filled front-run."""
     trace: list[BlockTrace] = []
     season = run_season(cfg, seed, trace_market=market, trace=trace)
     record = season.markets[market]
-    chosen = None
+    chosen, largest = None, 0.0
     for block in trace:
+        receipts = {id(t): r for t, r in zip(_flat(block), block.receipts)}
         for request, _ in block.plan.placements:
-            receipt = next(r for t, r in zip(_flat(block), block.receipts) if t is request.front)
-            if receipt.ok:
-                chosen = block
-                break
-        if chosen is not None:
-            break
+            if receipts[id(request.front)].ok and request.front.shares > largest:
+                chosen, largest = block, request.front.shares
     if chosen is None:
         raise SystemExit(f"no filled front-run in market {market} of seed {seed}")
     out_dir.mkdir(parents=True, exist_ok=True)

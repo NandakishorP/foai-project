@@ -346,7 +346,9 @@ class SeasonRecord:
         return [len(m.researchers) / n if n else 0.0 for m in self.markets]
 
 
-def run_season(cfg: SimConfig, seed: int) -> SeasonRecord:
+def run_season(cfg: SimConfig, seed: int, trace_market: int | None = None,
+               trace: list[BlockTrace] | None = None) -> SeasonRecord:
+    """Run a season. If `trace_market` is given, every block of that market is appended to `trace` (replays)."""
     rngs = RngFactory(seed)
     traits = draw_forecaster_traits(cfg, rngs)
     memory = ResearchMemory(ema=[None] * len(traits), alpha=cfg.agents.forecasters.research.ema_alpha)
@@ -354,7 +356,8 @@ def run_season(cfg: SimConfig, seed: int) -> SeasonRecord:
     season = SeasonRecord(seed=seed, traits=traits)
     for market in range(cfg.season.n_markets):
         researchers = decide_research(cfg, traits, memory, rngs, market)
-        record = run_market(cfg, rngs, market, traits, researchers, predator_memories)
+        market_trace = trace if market == trace_market else None
+        record = run_market(cfg, rngs, market, traits, researchers, predator_memories, market_trace)
         for index, gross in record.forecaster_pnl().items():
             memory.update(index, gross)
         season.markets.append(record)

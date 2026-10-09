@@ -1,0 +1,12 @@
+{
+  "git": {
+    "commit": "65eef4fe9c84cc361e4f4fe4309c99955d65155c",
+    "dirty": false
+  },
+  "seeds": [
+    0,
+    199
+  ],
+  "n_points": 16,
+  "config": "sim/experiments/configs/e2a.yaml"
+}

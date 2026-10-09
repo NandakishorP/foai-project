@@ -1,0 +1,27 @@
+Block 23: main price 0.5425 -> 0.6963
+
+Pending transactions (by arrival time):
+  #171   t=0.050  forecaster_5     buy   20.0 YES (limit 0.683)   seen by: predator_0
+  #175   t=0.150  forecaster_9     buy   16.7 YES (limit 0.683)   seen by: predator_0
+  #170   t=0.250  forecaster_4     buy   16.7 YES (limit 0.683)   seen by: predator_0
+  #169   t=0.350  forecaster_3     buy    9.5 YES (limit 0.683)   seen by: predator_0
+  #166   t=0.450  forecaster_0     buy   20.0 YES (limit 0.683)   seen by: predator_0
+  #167   t=0.550  forecaster_1     buy   19.8 YES (limit 0.683)   seen by: predator_0
+  #173   t=0.650  forecaster_7     buy   20.0 YES (limit 0.683)   seen by: predator_0
+  #168   t=0.750  forecaster_2     buy   10.3 YES (limit 0.683)   seen by: predator_0
+  #174   t=0.850  forecaster_8     sell    7.2 NO  (limit 0.317)   seen by: -
+  #172   t=0.950  forecaster_6     sell    4.7 NO  (limit 0.317)   seen by: -
+
+Execution order chosen by the builder:
+   1. predator_0       buy   15.0 YES (limit 0.571)  0.5425 -> 0.5795  ok  FRONT-RUN of #171 by predator_0 (bid 0.212)
+   2. forecaster_5     buy   20.0 YES (limit 0.683)  0.5795 -> 0.6273  ok  VICTIM (#171)
+   3. forecaster_9     buy   16.7 YES (limit 0.683)  0.6273 -> 0.6655  ok  
+   4. forecaster_4     buy   16.7 YES (limit 0.683)  0.6655 -> 0.6655  REVERTED (limit) 
+   5. forecaster_3     buy    9.5 YES (limit 0.683)  0.6655 -> 0.6862  ok  
+   6. forecaster_0     buy   20.0 YES (limit 0.683)  0.6862 -> 0.6862  REVERTED (limit) 
+   7. forecaster_1     buy   19.8 YES (limit 0.683)  0.6862 -> 0.6862  REVERTED (limit) 
+   8. forecaster_7     buy   20.0 YES (limit 0.683)  0.6862 -> 0.6862  REVERTED (limit) 
+   9. forecaster_2     buy   10.3 YES (limit 0.683)  0.6862 -> 0.6862  REVERTED (limit) 
+  10. forecaster_8     sell    7.2 NO  (limit 0.317)  0.6862 -> 0.6862  REVERTED (limit) 
+  11. forecaster_6     sell    4.7 NO  (limit 0.317)  0.6862 -> 0.6862  REVERTED (limit) 
+  12. predator_0       sell    4.7 NO  (limit 0.000)  0.6862 -> 0.6963  ok  

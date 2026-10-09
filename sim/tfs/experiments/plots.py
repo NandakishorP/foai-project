@@ -235,14 +235,13 @@ def plot_season_compare(per_market: Sequence[dict[str, Any]], group_by: str, tit
             lo = np.array([r[f"{metric}_lo"] for r in mine]) * scale
             hi = np.array([r[f"{metric}_hi"] for r in mine]) * scale
             ax.fill_between(x, lo, hi, color=colour, alpha=0.15, linewidth=0)
-            ax.plot(x, y, color=colour, linewidth=LINE_WIDTH, label=label)
-            _direct_label(ax, x[-1], y[-1], label)
+            ax.plot(x, y, color=colour, linewidth=LINE_WIDTH, label=label)  # lines end close together: legend only
     top.set_ylim(0, 105)
     top.set_ylabel("forecasters researching (%)")
     top.set_title(title, loc="left", fontsize=11)
     bottom.set_ylabel("truth lost (MSE vs p*_full)")
     bottom.set_xlabel("market in season")
-    bottom.set_xlim(1, max(r["market"] for r in rows) + 4)
+    bottom.set_xlim(1, max(r["market"] for r in rows) + 1)
     legend = top.legend(loc="lower left", fontsize=8, frameon=False, ncols=len(groups))
     for text in legend.get_texts():
         text.set_color(INK_SECONDARY)

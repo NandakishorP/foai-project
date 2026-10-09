@@ -436,6 +436,30 @@ The first E2a run crashed after ~11 minutes with `OverflowError` in `cost_at_pri
 
 ---
 
+## D-036 — Phase 2a results: H1 partly supported, H2 contradicted
+**Date:** 2026-10-10 · Runs from clean commit `65eef4f` (`meta.json`: dirty false). Archive: `docs/report/phase2a/`. Per-run CSVs (31–38 MB) are not committed; `python -m tfs run sim/experiments/configs/e2a.yaml` / `e2b.yaml` at that commit regenerates them exactly.
+
+**H1 (E2a, reference predator, markets 6–30, 200 paired seeds): PARTLY SUPPORTED.**
+- Δ1 truth-lost RMS = +3.4% [+3.2%, +3.7%]: entirely ≤ +15% ✓.
+- Leakage L = 0.130 [0.123, 0.138]: not ≥ 0.30 ✗.
+- Front-running barely hurts accuracy in the short run (as H1 says), but it redistributes less of the informed edge than H1's threshold. The reference predator nets ~5.8 per market; informed PnL falls from 59.3 to 51.6 per market.
+- Sweep:
+  - 2 and 4 hold-predators: L = 0.16 / 0.19, Δ1 = +4.1% / +4.4%.
+  - Latency matters little.
+  - The sandwich variant (back_run): L ≈ 0.28, Δ1 ≈ −0.1%; predator nets ~74 and the builder ~76 per market. Several identical sandwichers behave like one, because ties go to the same agent.
+
+**H2 (E2b, reference predator, markets 21–30): CONTRADICTED.**
+- Participation gap G = 6.0 pp [4.5, 7.6]: entirely < 10 pp → contradicted by rule. Steady-state participation is 55.2% without predators and 49.2% with one.
+- Δ2 truth-lost RMS = +11.1% [+6.2%, +17.0%], about 3× the short-run effect: the long-run channel exists and points the way H2 predicts.
+- Sweep: 2 / 4 predators give G = 8.3 / 9.7 pp and Δ2 = +15% / +17%. Cost ×0.5 / ×2 change little.
+
+**Interpretation (for the report; not a re-test).**
+- The long-run (participation) channel is real and larger than the short-run channel, but an order of magnitude smaller than the "collapse" H2 posits, at these predator settings.
+- One visible reason, in the replay: with a shared research signal (rho = 1), researchers trade the same way in the same block and mostly crowd each other out. Six of ten researchers revert on their own limits in the replayed block. That competition, not the predator, bounds research profits.
+- These verdicts are final under the pre-registration. Any follow-up (e.g. more aggressive predators, other rho) is exploratory and must be labelled as such.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

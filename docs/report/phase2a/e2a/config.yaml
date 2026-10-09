@@ -1,0 +1,116 @@
+name: e2a
+seeds:
+  count: 200
+  start: 0
+season:
+  n_markets: 30
+market:
+  ticks: 200
+  prior: 0.5
+  b_main: 100.0
+  b_ref: 30.0
+information:
+  mu: 1.0
+  precision_scale: 1.0
+  public:
+    rate: 0.05
+    expected_nats: 2.0
+  private:
+    rate: 0.05
+    pooled_nats: 2.0
+    rho: 1.0
+  shocks:
+  - tick: 100
+    nats: 1.0
+agents:
+  belief_model: own_signals
+  forecasters:
+    count: 10
+    capital_ratio: 2.0
+    kelly_fraction: 0.25
+    public_latency: 1
+    max_order: 20.0
+    min_order: 0.5
+    research:
+      mode: always
+      cost_median: null
+      cost_log_sigma: 0.5
+      ema_alpha: 0.3
+      explore_prob: 0.05
+  public_main:
+    count: 1
+    bankroll: 100.0
+    kelly_fraction: 0.25
+    delay: 1
+    max_order: 20.0
+    min_order: 0.5
+  public_ref:
+    count: 1
+    bankroll: 30.0
+    kelly_fraction: 0.25
+    delay: 5
+    max_order: 6.0
+    min_order: 0.5
+  noise_main:
+    count: 5
+    rate: 0.1
+    mean_size: 3.0
+    bankroll: 1000.0
+  noise_ref:
+    count: 3
+    rate: 0.1
+    mean_size: 1.0
+    bankroll: 1000.0
+  arbitrageurs:
+    count: 1
+    capital: 500.0
+    min_profit: 0.05
+    slippage: 0.02
+  predators:
+    count: 0
+    latency: 0.2
+    capital_ratio: 2.0
+    horizon: 10
+    markout_threshold: 0.0
+    drift_ema_alpha: 0.1
+    bid_share: 0.5
+    min_profit: 0.01
+    slippage: 0.01
+    own_impact_reversion: 1.0
+    back_run: false
+  trend:
+    count: 2
+    fast_span: 5
+    slow_span: 20
+    threshold: 0.02
+    order_size: 2.0
+    max_position: 20.0
+    bankroll: 200.0
+mempool:
+  policy: public
+  base_fee: 0.0
+metrics:
+  epsilon: 0.05
+analysis:
+  hypothesis: H1
+  score_from_market: 5
+  pair_on: agents.predators.count
+  reference:
+    agents.predators.count: 1
+    agents.predators.latency: 0.2
+    agents.predators.back_run: false
+sweep:
+  crossed:
+    agents.predators.count:
+    - 0
+    - 1
+    - 2
+    - 4
+  one_at_a_time:
+    agents.predators.latency:
+    - 0.05
+    - 0.2
+    - 0.5
+    agents.predators.back_run:
+    - false
+    - true
