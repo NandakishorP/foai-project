@@ -100,5 +100,9 @@ agents:
     max_position: 20.0
     bankroll: 200.0
 
+mempool:
+  policy: public          # pending transactions are readable by anyone (after their latency)
+  base_fee: 0.0           # 0 so the no-predator baseline is exactly the frozen calibration (D-033)
+
 metrics:
   epsilon: 0.05           # "close enough" to p*_avail for time-to-epsilon

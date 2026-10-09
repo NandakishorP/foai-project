@@ -36,19 +36,8 @@ from tfs.core.information import (
 from tfs.core.rng import RngFactory
 from tfs.core.types import Receipt, Tx, Venue
 from tfs.engines.fast import FastEngine
-
-
-class ArrivalOrderBuilder:
-    """Phase 1 builder: transactions land in a random arrival order, with no reordering for profit.
-
-    Phase 2a replaces this with the mempool and a profit-seeking builder.
-    """
-
-    def __init__(self, rng: np.random.Generator) -> None:
-        self.rng = rng
-
-    def order(self, txs: Sequence[Tx]) -> list[Tx]:
-        return [txs[i] for i in self.rng.permutation(len(txs))]
+from tfs.mempool.builder import FeeBuilder
+from tfs.mempool.mempool import Mempool, MempoolPolicy
 
 
 # --------------------------------------------------------------------------- #
@@ -172,8 +161,10 @@ def run_market(
     engine = FastEngine(
         {Venue.MAIN: cfg.market.b_main, Venue.REF: cfg.market.b_ref},
         {agent.agent_id: agent.bankroll for agent in agents},
+        base_fee=cfg.mempool.base_fee,
     )
-    builder = ArrivalOrderBuilder(rngs.stream("builder", market))
+    mempool = Mempool(MempoolPolicy(cfg.mempool.policy), rngs.stream("builder", market))
+    builder = FeeBuilder()
 
     ticks = cfg.market.ticks
     price_main, price_ref = np.empty(ticks), np.empty(ticks)
@@ -199,7 +190,8 @@ def run_market(
             )
             txs.extend(agent.act())
 
-        for receipt in engine.build_block(builder.order(txs)):
+        plan = builder.order(mempool.admit(txs))
+        for receipt in engine.build_block(plan.txs):
             pending_receipts[receipt.trade.agent_id].append(receipt)
             executed += receipt.ok
             reverted += not receipt.ok

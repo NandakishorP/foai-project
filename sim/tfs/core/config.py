@@ -152,6 +152,12 @@ class AgentsConfig:
 
 
 @dataclass(frozen=True)
+class MempoolConfig:
+    policy: Literal["public"]  # who can read pending transactions (Phase 3 adds private relay, commit-reveal, ZK)
+    base_fee: float  # fee every included transaction pays the builder (0 in the reference config, D-033)
+
+
+@dataclass(frozen=True)
 class MetricsConfig:
     epsilon: float  # tolerance for time-to-epsilon after shocks
 
@@ -164,6 +170,7 @@ class SimConfig:
     market: MarketConfig
     information: InformationConfig
     agents: AgentsConfig
+    mempool: MempoolConfig
     metrics: MetricsConfig
 
     def __post_init__(self) -> None:
