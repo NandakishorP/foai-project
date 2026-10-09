@@ -67,9 +67,12 @@ def test_rms_ci_is_sqrt_of_mse_ci() -> None:
     assert r.lo == pytest.approx(math.sqrt(max(e.lo, 0.0)))
 
 
-def test_research_captured() -> None:
-    from tfs.experiments.runner import research_captured
+def test_research_share_priced_is_a_ratio_of_sums() -> None:
+    from tfs.experiments.runner import research_share_priced
 
-    assert research_captured([0.0, 0.0], [0.1, 0.3]) == 1.0  # price equals p*_avail
-    assert research_captured([0.1, 0.3], [0.1, 0.3]) == 0.0  # no better than ignoring research
-    assert research_captured([0.4, 0.4], [0.1, 0.3]) < 0
+    assert research_share_priced([0.0, 0.0], [0.1, 0.3])[0] == 1.0  # price equals p*_avail
+    assert research_share_priced([0.1, 0.3], [0.1, 0.3])[0] == 0.0  # no better than ignoring research
+    # pooled: 1 - (0.01 + 0.1) / (0.02 + 1.0); a mean of per-run ratios would give 1 - (0.5 + 0.1) / 2
+    share, num, den = research_share_priced([0.01, 0.1], [0.02, 1.0])
+    assert share == pytest.approx(1 - 0.11 / 1.02)
+    assert (num, den) == (pytest.approx(0.055), pytest.approx(0.51))

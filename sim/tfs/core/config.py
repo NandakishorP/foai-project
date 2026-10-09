@@ -94,7 +94,7 @@ class ResearchConfig:
 @dataclass(frozen=True)
 class ForecasterConfig:
     count: int  # potential forecasters
-    bankroll: float  # fixed bankroll per market (DECISIONS D-015)
+    capital_ratio: float  # bankroll per market / b_main: informed capital relative to market depth (D-015, D-029)
     kelly_fraction: float  # k in f = k (p - m) / (1 - m)
     public_latency: int  # ticks before a public signal is visible to the forecaster
     max_order: float  # largest single order, in shares

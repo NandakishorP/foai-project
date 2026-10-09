@@ -255,7 +255,7 @@ p*_avail and p*_full use the exact Gaussian posterior for a group of k researche
 ## D-025 — Consequences of the correlated model
 **Date:** 2026-10-10 · **SPEC:** §2, §2.1
 
-**Decision (Claude, flagged to the owner).**
+**Decision (Claude; approved by the owner 2026-10-10).**
 1. **Equal research quality for all forecasters.** At rho = 1 every forecaster must see the identical signal, which per-forecaster precisions cannot allow. Heterogeneity (SPEC §2.1) now comes from research costs only.
 2. **`pooled_nats` replaces per-forecaster nats.** The configured quantity is the information of *all* forecasters' research combined (2 nats, the same total as before), and tau², sigma_e² are derived from it and rho. Sweeping rho then changes how the same information is spread across forecasters, not how much exists. At rho = 0 each forecaster holds pooled_nats/N = 0.2 nats, the old mean.
 3. **Research events are shared in time.** They are a single Poisson stream, rather than independent arrival times per forecaster. Within one event the common component must hit everyone at once. At rho = 0 this reproduces F-001's information content but synchronises arrival times; the E1 rho = 0 point is compared against F-001 to check the difference is small.
@@ -308,6 +308,27 @@ p*_avail and p*_full use the exact Gaussian posterior for a group of k researche
 
 ---
 
+## D-029 — Baseline calibration round 2 rule (pre-registered before any run; owner answer to Q6)
+**Date:** 2026-10-10 · Replaces the grid and selection parts of D-026. Criteria (a), (b), the steady state (markets 21–30), 200 seeds, `own_signals`, `cost_log_sigma` 0.5 and every other base parameter stay as in D-026.
+
+**Informed capital.** Parameterised as `capital_ratio` = forecaster bankroll / b_main (LMSR depth), replacing the absolute bankroll. Bankroll = capital_ratio × b_main, fixed per market (D-015). Quarter-Kelly is kept. (Consequence: in the E1 b sweep, forecaster capital now scales with b.)
+
+**Metric (b of the owner's conditions).** "Share of research information priced" = 1 − Σ aggregation MSE / Σ public-only MSE, pooled across all runs (ratio of sums, never a mean of per-run ratios). Its numerator and denominator are always reported alongside it (`research_captured_num`, `research_captured_den` in summaries; `share_num`, `share_den` in the grid). The round-1 code already pooled; round-1 values are unchanged. What was missing was reporting the parts.
+
+**Grid.**
+- rho ∈ {0, 0.25, 0.5, 0.75, 0.9, 1.0} × capital_ratio ∈ {1, 2, 4} (bankrolls 100, 200, 400 at b = 100) × cost multiplier m ∈ {0.25, 0.5, 0.75, 1.0}: 72 seasons.
+- The cost unit M is recomputed for each (rho, capital_ratio) by the D-017 procedure, since profits scale with capital.
+
+**Selection.**
+1. Feasible = share priced ≥ 0.6 **and** steady-state participation in [50%, 70%].
+2. Among feasible points: smallest rho, then smallest capital_ratio, then participation closest to 60%.
+3. **Fallback, if nothing is feasible:** among points with participation in [50%, 70%], take the highest share priced. Freeze it, record it as a limitation, and proceed without returning to the owner.
+4. D-026's bisection step is dropped: the fallback now covers the no-feasible case, and a grid-only rule is simpler to audit.
+
+The whole grid is archived and reported. The selection code is `tfs/experiments/baseline_calibration.py`; the rule is unit-tested on hand-made grids (`tests/test_baseline_calibration.py`).
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
@@ -315,4 +336,4 @@ p*_avail and p*_full use the exact Gaussian posterior for a group of k researche
 - **Q3 — Review date.** Not yet supplied.
 - **Q4 — Stable Foundry alongside foundry-zksync.** Installed: `forge Version: 1.3.5-foundry-zksync-v0.1.7` (checked 2026-10-10). Option: `FOUNDRY_DIR=~/.foundry-stable foundryup` installs stable binaries to a separate directory (foundryup reads `FOUNDRY_DIR`), used by this project via a Makefile/env var. Alternatively keep using foundry-zksync's forge, which compiles standard EVM by default. Decide before Phase 2b.
 - **Q5 — RESOLVED 2026-10-10 by D-024 (correlated signals) and D-026 (baseline calibration).** Original question: Private-information aggregation (F-001). The market as specified prices little private information. Options: keep it and report it; change how agents read the price; or change the information structure (e.g. Grossman–Stiglitz-style shared research signal). Owner decision needed before Phase 2a, because H2's mechanism depends on it.
-- **Q6 — Baseline calibration infeasible (D-028).** Owner decision needed on how to proceed before rho and costs can be frozen.
+- **Q6 — RESOLVED 2026-10-10 by D-029** (add informed capital to the calibration; fallback rule).

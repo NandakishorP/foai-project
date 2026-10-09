@@ -45,7 +45,8 @@ agents:
 
   forecasters:
     count: 10
-    bankroll: 100.0   # fixed per market (DECISIONS D-015)
+    capital_ratio: 1.0  # bankroll = capital_ratio x b_main, fixed per market (D-015, D-029).
+                        #   PLACEHOLDER until the baseline calibration (D-029) freezes it
     kelly_fraction: 0.25  # quarter-Kelly: common practice to limit estimation-error risk
     public_latency: 1     # sees public news one block after it is published
     max_order: 20.0       # simple execution cap per block (order splitting comes in Phase 3)

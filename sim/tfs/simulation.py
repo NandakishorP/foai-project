@@ -74,7 +74,7 @@ def build_agents(
                     liquidity=b[Venue.MAIN],
                     belief=make_belief(a.belief_model, prior_logodds),
                     kelly_fraction=fc.kelly_fraction,
-                    bankroll=fc.bankroll,
+                    bankroll=fc.capital_ratio * cfg.market.b_main,
                     max_order=fc.max_order,
                     min_order=fc.min_order,
                     public_latency=fc.public_latency,

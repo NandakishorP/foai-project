@@ -142,20 +142,27 @@ def summarise(rows_by_seed: Sequence[Sequence[dict[str, Any]]]) -> dict[str, Any
         e = rms_ci(per_seed[name])
         rms_name = name.replace("_mse", "_rms")
         out[rms_name], out[f"{rms_name}_lo"], out[f"{rms_name}_hi"] = e.mean, e.lo, e.hi
-    out["research_captured"] = research_captured(per_seed["aggregation_mse"], per_seed["public_only_mse"])
+    share = research_share_priced(per_seed["aggregation_mse"], per_seed["public_only_mse"])
+    out["research_captured"], out["research_captured_num"], out["research_captured_den"] = share
     return out
 
 
-def research_captured(aggregation_mse: Sequence[float], public_only_mse: Sequence[float]) -> float:
-    """Share of the acquired research information that the price reflects.
+def research_share_priced(
+    aggregation_mse: Sequence[float], public_only_mse: Sequence[float]
+) -> tuple[float, float, float]:
+    """Share of the acquired research information that the price reflects, with its parts.
 
-    1 − E[(p − p*_avail)²] / E[(p_public − p*_avail)²]: 1 means the price matches
-    p*_avail, 0 means it is no closer than a price that ignores all research,
-    negative means further away. A ratio of means across seeds, so it is
-    stable even when single runs have a tiny denominator.
+    share = 1 − Σ (p − p*_avail)² / Σ (p_public − p*_avail)², pooled over all runs
+    (a ratio of sums, not a mean of per-run ratios: single runs can have a tiny
+    denominator). 1 means the price matches p*_avail; 0 means it is no closer
+    than a price that ignores all research; negative means further away.
+    Returns (share, numerator, denominator), with numerator and denominator as
+    mean MSEs, so they can always be reported alongside the share (D-029).
     """
+    numerator = float(np.mean(aggregation_mse))
     denominator = float(np.mean(public_only_mse))
-    return 1.0 - float(np.mean(aggregation_mse)) / denominator if denominator > 0 else math.nan
+    share = 1.0 - numerator / denominator if denominator > 0 else math.nan
+    return share, numerator, denominator
 
 
 def summarise_per_market(rows_by_seed: Sequence[Sequence[dict[str, Any]]]) -> list[dict[str, Any]]:
