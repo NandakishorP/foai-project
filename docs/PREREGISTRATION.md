@@ -1,62 +1,67 @@
 # Pre-registration of Hypothesis Verdict Criteria
 
-> **Status: DRAFT — not yet binding.** The items marked **TO CONFIRM** must be settled by the owner. The commit that removes this banner is the pre-registration, and it must precede any E2a run. git history is the evidence.
+**Status: BINDING for H1 and H2.** Committed before any E2a or E2b run, and before any predator code exists. git history is the evidence. H3 is pre-registered separately, before E3 runs.
 
-Rules that apply to every hypothesis:
-- All comparisons are **paired**: the treatment and its baseline run on the same seeds (same signals, same noise-trader draws), with N seeds as set in the experiment config (default 200).
-- CIs are 95%, computed over seeds.
-- Truth lost and its parts are measured as MSE against `p*_full` (SPEC §2) and reported as RMS. Shares ("accounts for the majority") are computed in MSE units, where the decomposition is additive.
-- The verdict is taken at the **reference setting** named below. The full sweep is always reported alongside it.
-- These criteria are not edited after the experiment runs. Any change is logged in `docs/DECISIONS.md` and disclosed in the report.
+**Frozen baseline.** Commit `067fa2f` (DECISIONS D-030): `sim/experiments/configs/base.yaml` and `season_baseline.yaml`.
+- Correlated research with rho = 1: one shared research signal, the textbook Grossman–Stiglitz setting.
+- Informed capital: bankroll / b = 2. Research cost median 1.716.
+- Belief model `own_signals`. No-predator steady-state participation 55%; share of research information priced 0.70.
+- None of these values change for E2a or E2b.
+
+Any change to this file after an E2 run has started is logged in `docs/DECISIONS.md` and disclosed in the report, with the reason.
 
 ---
 
-## H1 — Short run (tested by E2a)
+## Rules common to H1 and H2
 
-*With participation fixed, front-running mostly redistributes profit from informed traders to predators, and truth lost rises only modestly.*
+1. **Paired design.** Every predator run has a no-predator twin on the same master seed. Common random numbers: the signals, noise-trader orders and research-exploration draws are identical. N = 200 seeds per configuration.
+2. **Confidence intervals.** 95%, from a paired bootstrap over seeds: 10,000 resamples, percentile intervals, fixed bootstrap seed 0. The resampling unit is the seed, so each resample keeps a run together with its twin.
+3. **"Clears a threshold" means the whole CI clears it** (strict rule). A point estimate alone never decides a verdict.
+4. **Truth lost** is the RMS of the market price against p*_full (SPEC §2). Relative change: Δ = RMS_predators / RMS_baseline − 1, computed from pooled MSEs (ratio of sums over seeds).
+5. **Reference setting.** The verdict is taken at the reference predator configuration in `sim/experiments/configs/e2a.yaml` / `e2b.yaml`. That configuration is one predator at its default latency. Its parameters are fixed in those files, with rationale, in the commit that adds the predator, before any E2 run, and they are not changed afterwards. The full sweeps (number of predators, latency, research-cost distribution) are always reported alongside the reference verdict.
+6. **Descriptive, not pass/fail:** the split of truth lost into aggregation and participation loss, predator PnL, builder revenue and noise-trader loss are reported for every experiment but do not enter any verdict.
 
-**Measured on:** the first market of each season (participation fixed by the initial research decisions), predator setting vs the paired no-predator baseline.
+---
 
-Let `L` = leakage ratio (share of informed traders' no-predator edge captured by predators), and `Δ` = relative increase in truth-lost RMS vs the no-predator baseline.
+## H1 — Short run (E2a)
 
-| Verdict | Condition (owner's criteria) |
+*With a fixed set of informed traders, front-running mostly redistributes profit from informed traders to predators, and truth lost rises only modestly.*
+
+**Measured on:** the first market of each season. Everyone researches there (optimistic start, D-020), so participation is fixed and identical with and without predators.
+
+- **Leakage ratio** L = 1 − Σ_seeds informed PnL (predators) / Σ_seeds informed PnL (no predators): the share of the informed traders' no-predator edge that is lost when predators are present. Predator PnL is reported next to it, to show where the edge went.
+- **Δ1** = relative change in truth-lost RMS, predators vs paired baseline (rule 4).
+
+| Verdict | Condition |
 |---|---|
-| **Supported** | `L ≥ 0.30` **and** `Δ ≤ 15%` |
-| **Contradicted** | `Δ > 30%` |
+| **Supported** | CI(L) entirely ≥ 0.30 **and** CI(Δ1) entirely ≤ +15% |
+| **Contradicted** | CI(Δ1) entirely > +30% |
 | **Partly supported** | anything else |
 
-**TO CONFIRM — how the 95% CI enters:**
-- *Proposed (strict):* Supported requires the CI of `L` to lie entirely ≥ 0.30 **and** the CI of `Δ` to lie entirely ≤ 15%. Contradicted requires the CI of `Δ` to lie entirely > 30%.
-- *Alternative (lenient):* compare point estimates to the thresholds, and report CIs alongside.
-
-**TO CONFIRM — reference setting:** which predator count and latency the verdict is taken at (proposed: the E2a default config, 1 predator at default latency, with values written here before commit).
-
-**TO CONFIRM — leakage ratio denominator:** proposed as the informed traders' mean PnL in the paired no-predator run (their "theoretical edge"), so `L = (predator PnL attributable to front-running informed orders) / (informed no-predator PnL)`.
-
 ---
 
-## H2 — Long run (tested by E2b)
+## H2 — Long run (E2b)
 
-*When research is a choice, predators shrink research participation, and truth lost rises sharply.*
+*When forecasters choose each market whether research is worth its cost, predators shrink research participation, and truth lost rises sharply.*
 
-| Verdict | Condition (owner's criteria) |
+**Measured on:** the **final stretch**, markets 21–30 of 30-market seasons (the calibration steady state, D-026/D-029), endogenous research.
+
+- **Participation gap** G = participation (no predators) − participation (predators), in percentage points, pooled over the final stretch.
+- **Δ2** = relative change in truth-lost RMS over the final stretch, predators vs paired baseline (rule 4).
+
+| Verdict | Condition |
 |---|---|
-| **Supported** | participation falls by **≥ 25 percentage points** over a season **and** participation loss accounts for **the majority (> 50%)** of the increase in truth lost |
-| **Contradicted** | **TO CONFIRM** — not yet specified |
-| **Partly supported** | **TO CONFIRM** — presumably anything else |
+| **Supported** | CI(G) entirely ≥ 25 pp **and** CI(Δ2) entirely > +30% |
+| **Contradicted** | CI(G) entirely < 10 pp **or** CI(Δ2) entirely ≤ +15% |
+| **Partly supported** | anything else |
 
-**TO CONFIRM — "falls ≥ 25 pp over a season" relative to what:**
-- *Proposed:* participation in the **final stretch** of the predator season is ≥ 25 pp lower than in the final stretch of the **paired no-predator season**. Both seasons start from identical initial conditions, so this isolates the predators' causal effect. Without predators, participation may also drift as forecasters compete away each other's profit.
-- *Alternative:* the drop from market 1 to the final stretch *within* the predator season.
-
-**TO CONFIRM — "final stretch":** proposed as the last 10 of the season's 30 markets.
-
-**TO CONFIRM — "majority of the increase":** proposed as `ΔMSE_participation / ΔMSE_truth_lost > 0.5` (predator vs paired baseline, final stretch, MSE units), with the same CI rule chosen for H1.
-
-**TO CONFIRM — contradicted criterion:** suggestion only (owner to choose): *contradicted* if the participation gap's 95% CI lies entirely below 10 pp (predators do not meaningfully reduce research).
+Notes fixed in advance:
+- **Headroom.** The no-predator steady state is 55% participation, so a 25 pp gap means predators push steady-state participation to 30% or below.
+- **"Rises sharply" (> +30%)** is set at H1's contradiction threshold, so a long-run rise counts as sharp only if it is larger than anything H1 tolerates as "modest". The 15% in the contradiction rule mirrors H1's "modest" bound.
+- **How the mechanism appears in the decomposition (rho = 1).** Every researcher sees the same research signal, so a single researcher already makes p*_avail = p*_full, and participation loss is zero whenever anyone researches. Researcher exit therefore mainly **removes informed capital** that pushes the price toward p*_avail. That is the Grossman–Stiglitz channel, and it appears as *aggregation* loss, not participation loss. This is why H2 is judged on total truth lost and participation, and the aggregation/participation split is reported only descriptively. Participation loss becomes non-zero only in markets where nobody researches.
 
 ---
 
-## H3 — Defense (tested by E3)
+## H3 — Defense (E3)
 
 To be pre-registered before E3 runs (Phase 3).

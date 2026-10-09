@@ -358,10 +358,27 @@ The whole grid is archived and reported. The selection code is `tfs/experiments/
 
 ---
 
+## D-032 — Phase 1 milestone (recalibrated) and binding pre-registration
+**Date:** 2026-10-10 · Outputs: `docs/report/phase1_milestone/` (generated at clean commit `1d3cb67`).
+
+**E1 (single markets, full participation, 200 seeds, own_signals).** Baseline truth-lost RMS 0.035 [0.034, 0.036]; share priced 0.96 (num 0.0012 / den 0.0327); 90% of runs settle within ε after the shock.
+- rho sweep, from 0 to 1: truth-lost RMS 0.171 → 0.128 → 0.095 → 0.065 → 0.048 → 0.035; share 0.17 → 0.96.
+- At rho = 0 and capital_ratio 1, the F-001 result is reproduced (truth-lost RMS 0.177 vs 0.178; share 0.11 vs 0.09). Synchronised research events (D-025) change little.
+
+**Season baseline (30 markets, 200 seeds).**
+- Participation: 100% (market 1) → 82% (market 2) → 60% (markets 11–20) → 55% [52%, 59%] (markets 21–30).
+- It is still drifting slowly down in the final stretch (56% at market 21, 53% at market 30). This is reported as observed; it was not adjusted.
+- Steady-state truth-lost MSE 0.0100, of which aggregation 0.0093 and participation 0.0007. The season-wide cross term is 2.0e-5 [−6.5e-5, 1.1e-4], consistent with 0.
+
+**Pre-registration.** `docs/PREREGISTRATION.md` rewritten and made binding. H1/H2 are judged on total truth-lost RMS, the leakage ratio (H1) and the participation gap (H2), using strict CI rules and paired bootstrap CIs. The aggregation/participation split is descriptive only.
+- Choices made by Claude where the owner gave no number: H2's "rises sharply" threshold (+30%), H2's contradiction rule, and the leakage ratio as the share of informed edge *lost*. These are flagged for the owner and can be amended before any E2 run.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
-- **Q2 — Pre-registration details.** See the "TO CONFIRM" items in `docs/PREREGISTRATION.md`.
+- **Q2 — RESOLVED 2026-10-10 by D-032** (binding pre-registration; three Claude-chosen details flagged).
 - **Q3 — Review date.** Not yet supplied (placeholder text received twice).
 - **Q4 — RESOLVED 2026-10-10 by D-031 (project-local install).** Global install: `forge Version: 1.3.5-foundry-zksync-v0.1.7` (checked 2026-10-10). Option: `FOUNDRY_DIR=~/.foundry-stable foundryup` installs stable binaries to a separate directory (foundryup reads `FOUNDRY_DIR`), used by this project via a Makefile/env var. Alternatively keep using foundry-zksync's forge, which compiles standard EVM by default. Decide before Phase 2b.
 - **Q5 — RESOLVED 2026-10-10 by D-024 (correlated signals) and D-026 (baseline calibration).** Original question: Private-information aggregation (F-001). The market as specified prices little private information. Options: keep it and report it; change how agents read the price; or change the information structure (e.g. Grossman–Stiglitz-style shared research signal). Owner decision needed before Phase 2a, because H2's mechanism depends on it.
