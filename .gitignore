@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+
+# Noir
+circuits/**/target/
+
+# Data caches and results
+sim/data/cache/
+results/
+
+.DS_Store
