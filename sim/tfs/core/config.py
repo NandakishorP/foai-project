@@ -158,6 +158,17 @@ class PredatorConfig:
 
 
 @dataclass(frozen=True)
+class AttackersConfig:
+    """Sealed-batch attackers (E3-V, descriptive; D-046). All zero in the baseline."""
+
+    non_reveal: int  # griefers that commit and never reveal
+    free_option: int  # attackers with two identities committing opposite sides, revealing one
+    spam: int  # committers of insolvent orders (rejected by the proof under zk_batch)
+    size: float  # shares per attacker order
+    bankroll: float
+
+
+@dataclass(frozen=True)
 class AgentsConfig:
     belief_model: BeliefModel  # how informed agents read the price (DECISIONS D-013)
     forecasters: ForecasterConfig
@@ -168,6 +179,7 @@ class AgentsConfig:
     arbitrageurs: ArbitrageConfig
     trend: TrendConfig
     predators: PredatorConfig
+    attackers: AttackersConfig
 
 
 MempoolPolicyName = Literal["public", "private_relay", "commit_reveal", "zk_batch"]

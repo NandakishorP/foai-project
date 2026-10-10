@@ -104,6 +104,7 @@ class PredatorMemory:
 
     beliefs: dict[str, AddressBelief] = field(default_factory=dict)
     drift_ema: float | None = None  # E[drift | informed], in log-odds
+    markout_ema: dict[str, float] = field(default_factory=dict)  # per-address mean markout (metadata predator)
 
     def belief(self, address: str) -> AddressBelief:
         return self.beliefs.setdefault(address, AddressBelief())

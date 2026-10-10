@@ -27,7 +27,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
 from tfs.core.config import MempoolConfig
-from tfs.core.types import Bundle, Receipt, Trade, Tx, Venue
+from tfs.core.types import Bundle, Receipt, Side, Trade, Tx, Venue
 from tfs.engines.fast import FastEngine
 from tfs.market.batch import SealedOrder
 
@@ -74,7 +74,13 @@ def to_sealed(trade: Trade, order_id: int) -> SealedOrder:
 
 
 class BatchDesk:
-    def __init__(self, cfg: MempoolConfig, engine: FastEngine, kinds: dict[str, str]) -> None:
+    def __init__(self, cfg: MempoolConfig, engine: FastEngine, kinds: dict[str, str],
+                 non_revealers: frozenset[str] = frozenset(), free_option_groups: dict[str, str] | None = None,
+                 spammers: frozenset[str] = frozenset()) -> None:
+        self.zk = cfg.policy == "zk_batch"
+        self.non_revealers = non_revealers
+        self.free_option_groups = free_option_groups or {}
+        self.spammers = spammers
         self.K = cfg.batch_interval
         self.tiers = cfg.escrow_tiers
         self.delay = cfg.proving_delay if cfg.policy == "zk_batch" else 0
@@ -113,6 +119,9 @@ class BatchDesk:
     def seal(self, trade: Trade, tick: int, reveal: bool = True, followup: Trade | None = None) -> bool:
         """Queue a sealed order for commitment (after the proving delay). False if not allowed this batch."""
         agent = trade.agent_id
+        if agent in self.spammers and self.zk:
+            return False  # no valid proof exists for an insolvent order
+        reveal = reveal and agent not in self.non_revealers
         commit_tick = tick + self.delay
         if self.kinds.get(agent) not in CROWD_KINDS and self._has_order(agent, self.batch_of(commit_tick)):
             return False  # one order per identity per batch
@@ -133,7 +142,7 @@ class BatchDesk:
             if due > tick:
                 still.append((due, entry))
                 continue
-            sized = self._fit_escrow(entry.order)
+            sized = self._spam_escrow(entry.order) if entry.order.agent_id in self.spammers else self._fit_escrow(entry.order)
             if sized is None:
                 continue
             order, tier = sized
@@ -158,6 +167,21 @@ class BatchDesk:
         size = min(order.size, tier / order.limit)
         return replace(order, size=size), tier
 
+    def _spam_escrow(self, order: SealedOrder) -> tuple[SealedOrder, float] | None:
+        """A spam commitment posts only the smallest tier, whatever the order's worst-case cost."""
+        tier = self.tiers[0]
+        cash = self.engine.balances()[order.agent_id].cash - self.engine.base_fee
+        return (order, tier) if cash >= tier else None
+
+    def _decide_free_option_reveals(self, entries: list[_Entry]) -> None:
+        """Each free-option pair reveals only the side the honest reveals push the batch towards."""
+        honest = [e for e in entries if e.reveal and e.order.agent_id not in self.free_option_groups]
+        net = sum(e.order.size if e.order.side is Side.YES else -e.order.size for e in honest)
+        wanted = Side.YES if net > 0 else Side.NO if net < 0 else None
+        for e in entries:
+            if e.order.agent_id in self.free_option_groups:
+                e.reveal = e.order.side is wanted
+
     # -------------------------------------------------------------- clearing
 
     def due_followups(self, tick: int) -> list[Tx]:
@@ -175,6 +199,8 @@ class BatchDesk:
             return []
         self.book = [e for e in self.book if self.batch_of(e.commit_tick) > closing]
         self.metadata = [m for m in self.metadata if m.batch > closing]
+        if self.free_option_groups:
+            self._decide_free_option_reveals(entries)
         revealed = [(e.order, e.escrow) for e in entries if e.reveal]
         unrevealed = [(e.order.agent_id, e.escrow) for e in entries if not e.reveal]
         self.stats.unrevealed += len(unrevealed)

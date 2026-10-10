@@ -21,6 +21,8 @@ from tfs.agents.arbitrageur import Arbitrageur
 from tfs.agents.base import Agent, Observation
 from tfs.agents.beliefs import make_belief
 from tfs.agents.forecaster import InformedForecaster
+from tfs.agents.attackers import FreeOptionTrader, NonRevealGriefer, SpamCommitter
+from tfs.agents.metadata_predator import MetadataPredator
 from tfs.agents.noise import NoiseTrader
 from tfs.agents.predator import Predator, PredatorMemory
 from tfs.agents.public_news import PublicNewsTrader
@@ -35,7 +37,7 @@ from tfs.core.information import (
     p_star_full,
 )
 from tfs.core.rng import RngFactory
-from tfs.core.types import Bundle, Receipt, Trade, Tx, Venue
+from tfs.core.types import Bundle, Receipt, Side, Trade, Tx, Venue
 from tfs.engines.fast import SLASHED_ID, FastEngine
 from tfs.mempool.batch_desk import BatchDesk
 from tfs.mempool.builder import BlockPlan, FeeBuilder, FrontRunRequest
@@ -121,13 +123,30 @@ def build_agents(
             )
         )
 
-    if a.predators.count and MempoolPolicy(cfg.mempool.policy).batched:
-        raise NotImplementedError("batch-policy predators are the metadata copy-traders (Phase 3a step 3)")
+    batched = MempoolPolicy(cfg.mempool.policy).batched
     memories = list(predator_memories) or [PredatorMemory() for _ in range(a.predators.count)]
     if len(memories) != a.predators.count:
         raise ValueError("one memory per predator is required")
     for j, memory in enumerate(memories):
-        agents.append(Predator(f"predator_{j}", b[Venue.MAIN], a.predators, memory, cfg.market.ticks, cfg.mempool.base_fee))
+        if batched:  # under sealed batches the predator can only copy-trade from metadata (H3a)
+            proving = cfg.mempool.proving_delay if cfg.mempool.policy == "zk_batch" else 0
+            agents.append(MetadataPredator(f"predator_{j}", b[Venue.MAIN], a.predators, memory, cfg.market.ticks,
+                                           cfg.mempool.batch_interval, proving))
+        else:
+            agents.append(Predator(f"predator_{j}", b[Venue.MAIN], a.predators, memory, cfg.market.ticks,
+                                   cfg.mempool.base_fee))
+
+    at = a.attackers
+    if (at.non_reveal or at.free_option or at.spam) and not batched:
+        raise ValueError("attackers only exist under sealed-batch policies")
+    K = cfg.mempool.batch_interval
+    for j in range(at.non_reveal):
+        agents.append(NonRevealGriefer(f"griefer_{j}", at.size, at.bankroll, K, rngs.stream("griefer", market, j)))
+    for j in range(at.free_option):
+        for side in (Side.YES, Side.NO):
+            agents.append(FreeOptionTrader(f"freeopt_{j}_{side.value}", f"freeopt_{j}", side, at.size, at.bankroll, K))
+    for j in range(at.spam):
+        agents.append(SpamCommitter(f"spam_{j}", at.size * 10, at.bankroll, K))  # insolvent: 10x what one tier covers
     return agents
 
 
@@ -232,7 +251,14 @@ def run_market(
     reverts: dict[str, int] = defaultdict(int)
     requested: dict[str, float] = defaultdict(float)
     filled: dict[str, float] = defaultdict(float)
-    desk = BatchDesk(cfg.mempool, engine, kind_of) if policy.batched else None
+    desk = None
+    if policy.batched:
+        desk = BatchDesk(
+            cfg.mempool, engine, kind_of,
+            non_revealers=frozenset(a.agent_id for a in agents if isinstance(a, NonRevealGriefer)),
+            free_option_groups={a.agent_id: a.group for a in agents if isinstance(a, FreeOptionTrader)},
+            spammers=frozenset(a.agent_id for a in agents if isinstance(a, SpamCommitter)),
+        )
 
     for tick in range(ticks):
         # 0. Sealed batches: reveal and clear the batch whose window just closed (D-046).
@@ -244,7 +270,7 @@ def run_market(
         prices = engine.prices()
         balances = engine.balances()
 
-        def observation(agent: Agent, visible: tuple[PendingTx, ...] = ()) -> Observation:
+        def observation(agent: Agent, visible: tuple[PendingTx, ...] = (), commits: tuple = ()) -> Observation:
             private = 0.0 if agent.private_source is None else float(own_private_llr[agent.private_source, tick])
             return Observation(
                 tick=tick,
@@ -255,6 +281,7 @@ def run_market(
                 receipts=tuple(pending_receipts.pop(agent.agent_id, ())),
                 mempool=visible,
                 last_block=last_block,
+                commits=commits,
             )
 
         # 1-2. Traders act; their transactions enter the mempool with arrival times.
@@ -272,6 +299,14 @@ def run_market(
         late: list[Tx] = []
         visible_ids: dict[str, set[int]] = {}
         for predator in predators:
+            if desk is not None and isinstance(predator, MetadataPredator):
+                # sealed batches: it sees commit metadata, never contents; its orders join the batch
+                predator.perceive(observation(predator, commits=tuple(desk.metadata)))
+                order = predator.batch_order()
+                for trade in predator.act() + ([order] if order is not None else []):
+                    desk.seal(trade, tick)  # unwinds first: one order per batch
+                desk.commit_due(tick)
+                continue
             visible = tuple(mempool.visible_to(pending, predator.latency))
             visible_ids[predator.agent_id] = {p.tx_id for p in visible}
             predator.perceive(observation(predator, visible))

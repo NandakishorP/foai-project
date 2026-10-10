@@ -9,7 +9,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from tfs.core.types import Account, Receipt, Tx, Venue
 from tfs.mempool.mempool import PendingTx
@@ -27,6 +27,7 @@ class Observation:
     receipts: tuple[Receipt, ...]  # the agent's own transaction results from the previous block
     mempool: tuple[PendingTx, ...] = ()  # pending transactions this agent can read (predators only)
     last_block: tuple[Receipt, ...] = ()  # every receipt of the previous block, in execution order (public chain data)
+    commits: tuple[Any, ...] = ()  # sealed batches: metadata (CommitMeta) of the open batch's commitments
 
 
 class Agent(ABC):

@@ -612,6 +612,26 @@ After resolution: payouts per account (|Δ| ≤ 1e-4) and market-maker PnL per v
 
 ---
 
+## D-047 — Metadata copy-trading predator and sealed-batch attackers (fixed before any E3 run)
+**Date:** 2026-10-10 · Code: `agents/metadata_predator.py`, `agents/attackers.py`, `mempool/batch_desk.py`.
+
+**Predator (ZK_BATCH arm, H3a).**
+- Sees commit metadata (sender unless a relayer is used, block, escrow tier) and revealed orders, never contents.
+- For each address it keeps μ_A, an EMA of that address's own post-fill markouts (its expected continuation).
+- In the last block its proof allows, it predicts the batch's move Δ = Σ tier·d_A·μ_A / Σ tier over the identifiable committing addresses (d_A = last revealed direction). If EV > costs, it joins the batch in that direction with an EV-maximising size.
+- No front-running gain is possible at a uniform price. Its exit keeps the expected aligned impact and |Δ|, minus its own impact (r = 1). It unwinds after H + 1 ticks by buying the other side.
+- **Parameters:** exactly the reference predator's (D-034): capital 2·b, H = 10, threshold 0, EMA 0.1, min_profit 0.01, slippage 0.01, r = 1. No new tunable numbers.
+
+**Change during development (disclosed).** The first version weighted addresses by P(informed) and learned drift only from addresses with P > 0.5, as the reference predator does. In a 6-market functional check (one seed, ZK_BATCH) no address ever passed that gate: a uniform-price batch prices informed demand at once and leaves little visible continuation. The predator therefore never traded, which would have made H3a trivially true, and the owner explicitly ruled out a trivially true H3. It was replaced by the per-address continuation estimate above, which has no gate. Afterwards it trades actively (76–250 shares per market in a 10-market check), with PnL near zero. No E3 run had been made.
+
+**Attackers** (E3-V, descriptive; config `agents.attackers`, all 0 in the baseline):
+- **Non-reveal griefer:** one commitment per batch, never revealed.
+- **Free-option pair:** two staked identities commit opposite sides; after the honest reveals, only the side the batch is moving towards is revealed.
+- **Spam committer:** insolvent orders posting the smallest tier. Slashed at reveal under commit_reveal; impossible under zk_batch.
+- Each attacker uses size 10 shares (a typical informed order; forecaster max_order is 20) and a bankroll of 200 (as a forecaster). Their bankrolls run out as they are slashed, which bounds their effect; the reported numbers say so.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

@@ -113,6 +113,13 @@ agents:
     back_run: false       # reference predator holds H ticks to ride the informed drift (SPEC §6: front-runs,
                           #   back-running optional); the sandwich variant is reported in E2a
 
+  attackers:              # sealed-batch attackers (E3-V only; D-046)
+    non_reveal: 0
+    free_option: 0
+    spam: 0
+    size: 10.0            # a typical informed-sized order (forecaster max_order is 20)
+    bankroll: 200.0       # as funded as a forecaster (capital_ratio 2 x b)
+
   trend:
     count: 2
     fast_span: 5          # classic fast/slow EMA crossover
