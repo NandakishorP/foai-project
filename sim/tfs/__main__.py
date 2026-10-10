@@ -183,6 +183,14 @@ def cmd_shock_study(args: argparse.Namespace) -> None:
     print(f"wrote {out}")
 
 
+def cmd_e5(args: argparse.Namespace) -> None:
+    """E5: a whale backing the wrong outcome, paired with a no-whale twin (descriptive, D-059)."""
+    from tfs.experiments.e5 import run
+    from tfs.experiments.runner import _git_state
+
+    print(f"wrote {run(args.config, args.seeds, args.workers, args.out, _git_state())}")
+
+
 def cmd_measure_env(args: argparse.Namespace) -> None:
     """Environment numbers for the order-splitting game, measured on baseline runs (D-053)."""
     from tfs.core.config import expand_sweep
@@ -250,6 +258,9 @@ def main() -> None:
 
     common(ss := sub.add_parser("shock-study", help="shock scenario: stability metrics and event-study plots"))
     ss.set_defaults(func=cmd_shock_study)
+
+    common(e5p := sub.add_parser("e5", help="E5 whale manipulation study (descriptive)"))
+    e5p.set_defaults(func=cmd_e5)
 
     me = sub.add_parser("measure-env", help="environment numbers for the order-splitting game (D-053)")
     me.add_argument("--seeds", type=int, default=50)

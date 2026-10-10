@@ -34,7 +34,7 @@ from tfs.metrics.accuracy import brier_scores, decompose, restricted_time_to_eps
 from tfs.metrics.stats import mean_ci, rms_ci
 from tfs.simulation import MarketRecord, SeasonRecord, run_season
 
-AGENT_KINDS = ("forecaster", "public_news", "noise", "arbitrageur", "trend", "predator", "attacker")
+AGENT_KINDS = ("forecaster", "public_news", "noise", "arbitrageur", "trend", "predator", "attacker", "whale")
 MSE_METRICS = ("truth_mse", "aggregation_mse", "participation_mse")
 
 
