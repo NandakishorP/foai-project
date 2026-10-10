@@ -28,8 +28,7 @@ from tfs.agents.predator import Predator, PredatorMemory, exposure_direction
 from tfs.agents.public_news import PublicNewsTrader
 from tfs.agents.slicing import make_slice_rule
 from tfs.agents.trend import TrendFollower
-from tfs.agents.whale import WhaleManipulator
-from tfs.agents.whale import yes_target as whale_yes_target
+from tfs.agents.whale import WhaleManipulator, yes_target as whale_yes_target
 from tfs.core.config import SimConfig
 from tfs.core.information import (
     ForecasterTraits,
