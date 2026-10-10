@@ -648,6 +648,27 @@ After resolution: payouts per account (|Δ| ≤ 1e-4) and market-maker PnL per v
 
 ---
 
+## D-049 — SealedBatchAuction and IdentityRegistry (Phase 3a step 5)
+**Date:** 2026-10-10
+
+- **`SealedBatchAuction`:** commit (escrow tier; ZK: UltraHonk proof over [commitment, escrow, batch, nullifier, registry root]; commit-reveal: public nullifier keccak(sender, batch)) → reveal (Poseidon2 opening, checked on-chain with the library verified against Noir) → clear.
+  - Clearing is the price ladder of `market/batch.py` in 18-decimal fixed point: interval scan, then the bound with integer bisection; margin rationed with matched pairs first, then the excess side pro-rata.
+  - The net imbalance trades with the LMSR through TradeRouter, matched pairs are split into complete sets, fills pay the uniform price from escrow, the rest is refunded, and unrevealed or insolvent escrow is slashed.
+- **Rounding** (found in review before testing):
+  - the uniform price rounds *up* for the side that pays the LMSR, so payments always cover purchase plus sets;
+  - per-order payments round up and are capped at the escrow.
+- **`IdentityRegistry`:** staked registration; depth-8 Poseidon2 Merkle tree (the Yul Poseidon2 variant, verified against Noir vectors); `path(index)` gives the prover its siblings. The root is recomputed in full on each registration (about 255 hashes): a setup cost, not a per-trade cost.
+- **`MockVerifier`:** test-only, accepts everything, used for clearing-maths differential tests over many orders.
+- **Tests:** 47 Foundry tests in total, all passing, including:
+  - commit/reveal/clear with conservation of USDC;
+  - identical orders sharing pro-rata at the shared limit;
+  - slashing (unrevealed; insolvent under commit-reveal);
+  - nullifiers and timing;
+  - a fuzzed random-batch property test (conservation, dust only, price in (0, 1));
+  - a **real UltraHonk proof end to end**: commit, replay rejected, reveal, clear; about 5.5M gas for the whole batch.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
