@@ -503,6 +503,19 @@ E3's core comparison is a 2×2: {predators 0, 1} × {PUBLIC, ZK_BATCH}. It separ
 
 ---
 
+## D-041 — Phase 2b toolchain and Solidity dependencies
+**Date:** 2026-10-10 · Phase 2b plan approved.
+
+- The Foundry project lives in `contracts/` (`contracts/foundry.toml`), matching SPEC §10's "contracts/ — Foundry project". The plan said a root `foundry.toml`; `contracts/` is cleaner.
+- Built with the project-local forge v1.4.4 (D-031), Solidity **0.8.26** (pinned), optimizer 200 runs.
+- Dependencies as git submodules (`forge install`), pinned by tag:
+  - OpenZeppelin Contracts **v5.1.0** (ERC20, ERC1155 + Supply, SafeERC20);
+  - PRBMath **v4.1.0** (SD59x18 `exp`/`ln` for the LMSR);
+  - forge-std **v1.9.4** (tests).
+- The Python side adds `web3` in an optional extra `[evm]` (EvmEngine only); logged when added.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
