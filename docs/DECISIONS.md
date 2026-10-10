@@ -516,6 +516,32 @@ E3's core comparison is a 2×2: {predators 0, 1} × {PUBLIC, ZK_BATCH}. It separ
 
 ---
 
+## D-042 — EvmEngine conventions
+**Date:** 2026-10-10
+
+- **Python dependency:** `web3` 7.x in the optional extra `[evm]`. The Monte Carlo core does not need it.
+- **Anvil** (project-local, D-031) is started per engine on a free port, with `--no-mining --order fifo --gas-price 0 --base-fee 0 --gas-limit 1e9`. FIFO plus manual `evm_mine` makes each block's order exactly the builder's send order; `test_block_order_is_the_builder_order` checks it.
+- **Accounts:** each agent gets its own dev account; the deployer, builder and oracle proposer get their own.
+- **Contracts are deployed from Python** (`contracts/out` artifacts). The planned `Deploy.s.sol` is not needed: deploying from Python keeps one source of the deployment order.
+- **Unit conversion:** amounts in 6 decimals. Buys round to nearest; sells round toward zero (never one unit more than held). Limits in 18 decimals, rounded down.
+- **Resolution** uses the optimistic oracle's undisputed path (propose → window → settle), then every agent redeems.
+- `LMSRMarket.Traded` now carries the post-trade price, so per-trade before/after prices (used by anchored beliefs and predator markouts) can be rebuilt from logs.
+
+---
+
+## D-043 — Differential-test tolerance (stated before the test was written)
+**Date:** 2026-10-10
+
+The identical ordered blocks are replayed on FastEngine (floats) and EvmEngine (fixed point on-chain). After every block:
+- every venue price: |Δ| ≤ 1e-6;
+- every account's cash: |Δ| ≤ 1e-4 USDC (6-decimal rounding accumulates over hundreds of trades; one trade differs by ≤ 1e-6);
+- every account's shares: |Δ| ≤ 1e-5;
+- receipt ok flags: equal, except a **boundary case**, where a trade's FastEngine average price lies within 1e-6 of its limit. Boundary cases are counted and reported, never hidden; if one occurs, the engines' states may legitimately diverge from that block on, and the test reports that rather than loosening tolerances.
+
+After resolution: payouts per account (|Δ| ≤ 1e-4) and market-maker PnL per venue (|Δ| ≤ 1e-4).
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
