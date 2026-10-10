@@ -28,6 +28,7 @@ import yaml
 
 BeliefModel = Literal["own_signals", "price_anchored"]
 ResearchMode = Literal["always", "endogenous"]
+SliceRule = Literal["capped", "naive", "twap", "random", "expectiminimax"]
 
 
 # --------------------------------------------------------------------------- #
@@ -93,6 +94,20 @@ class ResearchConfig:
 
 
 @dataclass(frozen=True)
+class ExecutionConfig:
+    """How a forecaster slices its Kelly shortfall over blocks (E4; SPEC §6.1; DECISIONS D-053, D-054)."""
+
+    rule: SliceRule
+    depth: int  # expectiminimax search depth, in blocks
+    kappa: float  # competitor push: share of the gap other traders close per block (measured)
+    predator_p_informed: float  # the predator's belief that a forecaster is informed (measured)
+    predator_drift: float  # its E[drift | informed], log-odds (measured)
+    logit_step: float  # search grid for price and belief
+    size_ratio: float  # geometric search grid for the remaining shares
+    twap_slices: int  # TWAP sends 1/twap_slices of the shortfall per block
+
+
+@dataclass(frozen=True)
 class ForecasterConfig:
     count: int  # potential forecasters
     capital_ratio: float  # bankroll per market / b_main: informed capital relative to market depth (D-015, D-029)
@@ -100,6 +115,7 @@ class ForecasterConfig:
     public_latency: int  # ticks before a public signal is visible to the forecaster
     max_order: float  # largest single order, in shares
     min_order: float  # orders smaller than this are not worth sending
+    execution: ExecutionConfig
     research: ResearchConfig
 
 

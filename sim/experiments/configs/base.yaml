@@ -53,6 +53,18 @@ agents:
     public_latency: 1     # sees public news one block after it is published
     max_order: 20.0       # simple execution cap per block (order splitting comes in Phase 3)
     min_order: 0.5        # ignore dust-sized adjustments
+    execution:            # how an order is sliced over blocks (E4, SPEC §6.1; DECISIONS D-053, D-054)
+      rule: capped        # the Phase 1-3a rule: min(Kelly shortfall, max_order, push cap) each block.
+                          #   E4 compares naive / twap / random / expectiminimax against it
+      depth: 3            # expectiminimax depth in blocks (E4 reference; swept 1-4 in E4-V)
+      kappa: 0.867        # competitor push: median share of a *trading* forecaster's gap that other traders
+                          #   close in one block, no-predator PUBLIC baseline (`tfs measure-env`, 50 seeds;
+                          #   docs/report/phase3b/environment.json). Measured before any E4 run.
+      predator_p_informed: 0.196  # the reference predator's mean P(informed) about forecasters, E2a baseline (measured)
+      predator_drift: 0.219       # its E[drift | informed], log-odds (measured, same runs)
+      logit_step: 0.01    # search grid for price and belief: a third of the per-block noise move (0.03)
+      size_ratio: 1.189   # 2^(1/4): neighbouring points of the remaining-shares grid differ by 19%
+      twap_slices: 5      # TWAP sends 1/5 of the shortfall each block
     research:
       mode: always        # E1 fixes participation; season experiments use "endogenous"
       cost_median: null   # set by the cost-calibration rule (DECISIONS D-017) for endogenous runs

@@ -1,0 +1,17 @@
+{
+  "KappaMeasurement": {
+    "kappa": 0.8667707341741829,
+    "mean": 0.7006155950774801,
+    "q25": 0.39765086898032515,
+    "q75": 0.994725758503628,
+    "n_ticks": 337,
+    "seeds": 50,
+    "kappa_all_gap_ticks": 0.0
+  },
+  "PredatorMeasurement": {
+    "p_informed_mean": 0.1955229534134212,
+    "drift_mean": 0.21883572804435072,
+    "frontrun_share": 0.10757929700625565,
+    "seeds": 50
+  }
+}

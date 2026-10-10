@@ -118,6 +118,26 @@ def cmd_h3(args: argparse.Namespace) -> None:
     print(f"wrote {args.out / 'e3' / 'h3_verdicts.json'}")
 
 
+def cmd_measure_env(args: argparse.Namespace) -> None:
+    """Environment numbers for the order-splitting game, measured on baseline runs (D-053)."""
+    from tfs.core.config import expand_sweep
+    from tfs.experiments.environment import as_dict, measure_kappa, measure_predator
+
+    def point(config: Path, label: str):
+        return {p.label: p.config for p in expand_sweep(load_raw(config))}[label]
+
+    no_predator = point(Path("sim/experiments/configs/e3_f.yaml"),
+                        "mempool.policy=public|agents.predators.count=0|baseline")
+    reference = point(Path("sim/experiments/configs/e2a.yaml"), "agents.predators.count=1|baseline")
+    seeds = range(args.seeds)
+    result = as_dict(measure_kappa(no_predator, seeds, first_market=5),
+                     measure_predator(reference, seeds, first_market=5))
+    out = args.out / "environment"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "environment.json").write_text(json.dumps(result, indent=2))
+    print(json.dumps(result, indent=2))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m tfs")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -146,6 +166,11 @@ def main() -> None:
     h3p = sub.add_parser("h3", help="pre-registered H3 verdicts from the E3-F, E3-K and E3-E runs")
     h3p.add_argument("--out", type=Path, default=Path("results"))
     h3p.set_defaults(func=cmd_h3)
+
+    me = sub.add_parser("measure-env", help="environment numbers for the order-splitting game (D-053)")
+    me.add_argument("--seeds", type=int, default=50)
+    me.add_argument("--out", type=Path, default=Path("results"))
+    me.set_defaults(func=cmd_measure_env)
 
     rp = sub.add_parser("replay", help="explain a front-run block by block")
     rp.add_argument("config", type=Path)

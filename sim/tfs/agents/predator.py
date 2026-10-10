@@ -75,6 +75,25 @@ def exposure_direction(trade: Trade) -> int:
     return 1 if (trade.side is Side.YES) == buys else -1
 
 
+def front_run_ev(x: float, b: float, side: Side, d: int, slot: float, victim_shares: float, reversion: float,
+                 expected_drift: float, back_run: bool, base_fee: float) -> float:
+    """Expected profit of front-running a victim of `victim_shares` with x shares at log-odds `slot`.
+
+    Net of the exit's LMSR slippage and of base fees; not yet net of the builder bid.
+    A pure function, so the order-splitting game (tfs.search.order_splitting) models the
+    predator with exactly the formula the predator itself uses.
+    """
+    cost = cost_at_price(sigmoid(slot), b, side, x)
+    own_impact, victim_impact = d * x / b, d * victim_shares / b
+    if back_run:  # sell straight after the victim: nothing has had time to change
+        exit_logodds = slot + own_impact + victim_impact
+    else:
+        remaining_own = (1.0 - reversion) * own_impact
+        exit_logodds = slot + remaining_own + victim_impact + d * expected_drift
+    proceeds = -cost_at_price(sigmoid(exit_logodds), b, side, -x)
+    return proceeds - cost - 2 * base_fee  # two transactions: in and out
+
+
 @dataclass
 class AddressBelief:
     """Beta posterior over the probability that the price keeps moving in the direction of A's trades."""
@@ -295,19 +314,9 @@ class Predator(Agent):
         return Decision(pending, x, ev_gross, bid, ev_gross - bid, p_inf, slot)
 
     def ev_gross(self, x: float, victim: Trade, d: int, side: Side, slot: float, expected_drift: float) -> float:
-        """Expected profit of front-running `victim` with x shares at log-odds `slot`.
-
-        Net of the exit's LMSR slippage and of base fees; not yet net of the bid.
-        """
-        cost = cost_at_price(sigmoid(slot), self.b, side, x)
-        own_impact, victim_impact = d * x / self.b, d * abs(victim.shares) / self.b
-        if self.cfg.back_run:  # sell straight after the victim: nothing has had time to change
-            exit_logodds = slot + own_impact + victim_impact
-        else:
-            remaining_own = (1.0 - self.cfg.own_impact_reversion) * own_impact
-            exit_logodds = slot + remaining_own + victim_impact + d * expected_drift
-        proceeds = -cost_at_price(sigmoid(exit_logodds), self.b, side, -x)
-        return proceeds - cost - 2 * self.base_fee  # two transactions: in and out
+        """Expected profit of front-running `victim` with x shares at log-odds `slot` (see `front_run_ev`)."""
+        return front_run_ev(x, self.b, side, d, slot, abs(victim.shares), self.cfg.own_impact_reversion,
+                            expected_drift, self.cfg.back_run, self.base_fee)
 
     def _fills(self, trade: Trade, logodds: float) -> bool:
         """Would this trade meet its own limit at this price?"""

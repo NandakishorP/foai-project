@@ -84,6 +84,22 @@ def yes_shares_to_move_price(p_from: float, p_to: float, b: float) -> float:
     return b * (logit(p_to) - logit(p_from))
 
 
+def highest_logodds_to_fill(shares: float, limit: float, b: float) -> float:
+    """Highest YES log-odds at which buying `shares` YES still averages at most `limit` per share.
+
+    Buying x shares at price p costs b·ln(1 + p·(e^{x/b} − 1)) (see `cost_at_price`).
+    "Average ≤ limit" means that cost ≤ x·limit, i.e. p ≤ (e^{x·limit/b} − 1) / (e^{x/b} − 1).
+    So the answer is the logit of that bound: a closed form, no bisection needed.
+    """
+    z = shares / b
+    return logit(math.expm1(z * limit) / math.expm1(z))
+
+
+def affordable_shares(price: float, b: float, budget: float) -> float:
+    """Most YES shares that `budget` buys at YES price `price` (inverse of `cost_at_price`)."""
+    return b * math.log1p(math.expm1(budget / b) / price)
+
+
 def max_market_maker_loss(b: float) -> float:
     return b * math.log(2.0)
 

@@ -804,6 +804,31 @@ H3c contradicted on its "compounds beyond 3K" branch. ΔT is not monotone in K. 
 
 ---
 
+## D-054 — E4 game parameters measured; MIN uses the predator's measured beliefs (owner, before any E4 run)
+**Date:** 2026-10-10 · Measured with `python -m tfs measure-env --seeds 50`. Archived: `docs/report/phase3b/environment.json`.
+
+**Measurements** (baseline runs only, never E4 runs):
+- **κ = 0.867.** This is the median share of forecaster 0's gap that *other* traders close in one block, in the no-predator PUBLIC baseline. IQR is [0.40, 0.99], from 337 ticks.
+  - The first definition used every tick with a gap ≥ 0.1 and gave a median of 0. Most such ticks are equilibrium ticks: every researcher has reached its Kelly target and nobody trades.
+  - Before any E4 run, the definition was corrected to the only case the game models: ticks where forecaster 0 sent an order. Both numbers are reported.
+- **Reference predator (E2a baseline):**
+  - P(informed) about forecasters, at season end: 0.196;
+  - E[drift | informed]: 0.219 log-odds;
+  - front-runs per forecaster order: 0.108 (it can front-run only one victim per block among about 10 researchers).
+
+**Change to the D-053 MIN model** (owner decision, before any E4 run).
+- D-053 had MIN use P(informed) = 1 and a drift equal to the competitor-closed gap. At κ = 0.87 that makes every slice worth about 0 (0.01–0.02 USDC), so the search's choice was noise.
+- **MIN now uses the reference predator's measured beliefs** (P(informed) 0.196, E[drift] 0.219) in the same EV formula. It is still the worst case among the front-runs it expects to profit from, and it still sees every slice.
+- Not adopted: a "targeted with probability 0.108" chance node (more faithful, but a weaker MIN and a slower search).
+- With this change the search gives clear decisions, e.g. R/4 first, with values of 0.5–4 USDC.
+- H4's thresholds and statistics are unchanged.
+
+**Limitations (disclosed):**
+- The searcher assumes competitors trade as in the capped-rule baseline (κ) and a predator with baseline beliefs.
+- Both change when every forecaster uses the search, and the model does not adapt to that.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3; implemented in Phase 3b as D-053.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
