@@ -644,7 +644,7 @@ After resolution: payouts per account (|Δ| ≤ 1e-4) and market-maker PnL per v
   - Shared hashes live in `circuits/order_lib`. The helper circuit `order_hasher` computes public inputs for Python with the same code, so Python never re-implements Poseidon2.
 - **Proving benchmark** (20 proofs, Apple M4 Pro, 14 threads): median **0.28 s**, p95 0.29 s (witness + UltraHonk proof, keccak transcript). The D-046 rule ceil(0.28 / 12) gives **proving_delay = 1 tick** in `base.yaml`. That is conservative against ZK: a 0.28 s proof fits inside one block, so the realistic delay is 0. The rule was fixed in advance and is kept; the conservatism is disclosed.
 - **Verifier** (bb `write_solidity_verifier`): accepts the real proof and rejects a wrong escrow or batch id. Verification gas ≈ **2.81M** (vs Phase 2b LMSR buy ~158k: about 18×). The verifier's runtime code is **24,643 bytes, 67 over the EIP-170 limit** at optimizer runs 200, so it is not deployable on Ethereum as generated. Anvil runs with `--disable-code-size-limit`; this deployability cost is reported.
-- **Solidity 0.8.26 → 0.8.27** for all contracts (the generated verifier requires ≥ 0.8.27; patch release, same semantics). All 39 Foundry tests pass after the bump.
+- **Solidity 0.8.26 → 0.8.27** for all contracts (the generated verifier requires ≥ 0.8.27; patch release, same semantics). All 35 Foundry tests pass after the bump.
 
 ---
 

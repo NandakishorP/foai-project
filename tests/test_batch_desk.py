@@ -13,6 +13,7 @@ LIQ = {Venue.MAIN: 100.0, Venue.REF: 30.0}
 
 
 def _desk(base_config: SimConfig, **changes) -> tuple[BatchDesk, FastEngine]:
+    changes.setdefault("proving_delay", 0)  # routing tests use no proof delay unless they test it
     cfg = dataclasses.replace(base_config.mempool, policy="zk_batch", **changes)
     engine = FastEngine(LIQ, {"f": 1000.0, "n": 1000.0, "arb": 1000.0, "poor": 3.0})
     kinds = {"f": "forecaster", "n": "noise", "arb": "arbitrageur", "poor": "forecaster"}
@@ -80,13 +81,19 @@ def test_metadata_shows_sender_and_tier_but_not_contents(base_config: SimConfig)
 
 
 def test_no_predators_policies_differ_only_where_they_should(base_config: SimConfig) -> None:
-    """Without predators, private relay is exactly public, and commit-reveal is exactly ZK (no attackers, no delay)."""
+    """Without predators or attackers: private relay is exactly public; commit-reveal differs from ZK
+    only through the proving delay (equal when it is 0, different at the benchmarked 1 tick)."""
     from tfs.core.config import replace_in
     from tfs.simulation import run_season
 
     cfg = replace_in(replace_in(base_config, "season.n_markets", 2), "market.ticks", 120)
-    runs = {p: run_season(replace_in(cfg, "mempool.policy", p), 3).markets[-1] for p in
-            ("public", "private_relay", "commit_reveal", "zk_batch")}
-    assert runs["public"].pnl == runs["private_relay"].pnl
-    assert runs["commit_reveal"].pnl == runs["zk_batch"].pnl
-    assert runs["public"].pnl != runs["zk_batch"].pnl
+
+    def last(policy: str, delay: int):
+        c = replace_in(replace_in(cfg, "mempool.policy", policy), "mempool.proving_delay", delay)
+        return run_season(c, 3).markets[-1]
+
+    assert last("public", 1).pnl == last("private_relay", 1).pnl
+    assert last("commit_reveal", 0).pnl == last("zk_batch", 0).pnl
+    assert last("commit_reveal", 1).pnl == last("commit_reveal", 0).pnl  # the delay applies to ZK only
+    assert last("zk_batch", 1).pnl != last("zk_batch", 0).pnl
+    assert last("public", 1).pnl != last("zk_batch", 0).pnl
