@@ -778,9 +778,35 @@ H3c contradicted on its "compounds beyond 3K" branch. ΔT is not monotone in K. 
 
 ---
 
+## D-053 — Phase 3b part 1 design (E4 and shock scenarios); H4 pre-registration
+**Date:** 2026-10-10 · Owner answers in plan mode; plan approved. H4 is in PREREGISTRATION.md, committed before any E4 code.
+
+**E4: the order-splitting game (SPEC §6.1)**
+- **MIN is the rational worst-case predator.** It minimises MAX's profit, but only over front-runs that are profitable for itself under the simulation predator's own closed-form EV.
+  - r = 1, P(informed) = 1, drift = competitor push.
+  - The front-run is capped at x_max, so the victim still fills.
+  - Why: under a pure zero-sum MIN, every slice it sees is pushed to MAX's limit regardless of cost. "Send everything at once" then tends to be optimal and the search becomes degenerate.
+- **CHANCE nodes:**
+  - noise flow (3 outcomes);
+  - public news (probability = public rate; closes the public-information share of the gap);
+  - a deterministic competitor push κ, measured on the no-predator PUBLIC baseline before any E4 run.
+- **Search:** plain expectiminimax (the reference), plus alpha-beta on MAX/MIN, Star1 at chance nodes, move ordering and a transposition table.
+- **Runtime:** the forecaster looks up the search's move at the nearest grid state (lazily filled policy table).
+- **Primary population:** all forecasters use the rule under test. The single deviator is descriptive.
+
+**Shock scenarios (descriptive; resolves Q1)**
+- **False news** is part of the generative model. Every shock is false with known probability `q_false`, and its LLR is the exact mixture LLR. A correction published `correction_delay` ticks later turns it into the exact LLR. A scenario may force a shock's status. Defaults (q_false = 0) leave every earlier result unchanged.
+- **Depeg** (minimal mechanistic model):
+  - the main market's USDC is worth 1 − δ dollars for a window; the reference venue settles in an unaffected unit;
+  - the dollar-valued arbitrageur trades only when its worst-case dollar payoff covers the dollar cost, so its band widens and arbitrage withdraws;
+  - noise-trader withdrawal is a scenario input (swept), not a modelled result.
+- **Stability metrics** (window 40 ticks): recovery, max deviation, overshoot, liquidity, trend-follower amplification (paired, trend 2 vs 0) and the arbitrageur's reaction. All are fixed in the plan before any run.
+
+---
+
 ## Open questions
 
-- **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
+- **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3; implemented in Phase 3b as D-053.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
 - **Q2 — RESOLVED 2026-10-10 by D-032** (binding pre-registration; three Claude-chosen details flagged).
 - **Q3 — RESOLVED 2026-10-10:** review planned for 31 October 2026 (D-045).
 - **Q4 — RESOLVED 2026-10-10 by D-031 (project-local install).** Global install: `forge Version: 1.3.5-foundry-zksync-v0.1.7` (checked 2026-10-10). Option: `FOUNDRY_DIR=~/.foundry-stable foundryup` installs stable binaries to a separate directory (foundryup reads `FOUNDRY_DIR`), used by this project via a Makefile/env var. Alternatively keep using foundry-zksync's forge, which compiles standard EVM by default. Decide before Phase 2b.

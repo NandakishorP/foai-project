@@ -1,6 +1,6 @@
 # Pre-registration of Hypothesis Verdict Criteria
 
-**Status: BINDING for H1, H2 and H3.** Committed before any E2a or E2b run, and before any predator code exists. git history is the evidence. H3 is pre-registered separately, before E3 runs.
+**Status: BINDING for H1, H2, H3 and H4.** Committed before any E2a or E2b run, and before any predator code exists. git history is the evidence. H3 is pre-registered separately, before E3 runs.
 
 **Frozen baseline.** Commit `067fa2f` (DECISIONS D-030): `sim/experiments/configs/base.yaml` and `season_baseline.yaml`.
 - Correlated research with rho = 1: one shared research signal, the textbook Grossman–Stiglitz setting.
@@ -111,3 +111,43 @@ For truth-lost MSE, participation and researcher profit (E3-E and E3-F):
 
 ### Variants (E3-V, descriptive only)
 Relayer (sender hidden); PRIVATE_RELAY; COMMIT_REVEAL with escrow and slashing; the non-reveal, free-option and spam attackers; a predator with r = 0.5 in both arms.
+
+---
+
+## H4 — Smart execution (E4) — BINDING
+
+*Search-based order splitting (expectiminimax with alpha-beta, SPEC §6.1) lets informed traders keep more of their edge against the predator than the best simple execution rule.*
+
+H4 is not in the SPEC's original H1–H3. It turns E4's question ("does smart execution help?") into a pre-registered claim. Thresholds were proposed by Claude and ratified by the owner (approval of the Phase 3b plan, 2026-10-10). Committed before any E4 code or run (DECISIONS D-053).
+
+**Setting.**
+- The frozen baseline (D-030) and the reference predator (D-034), PUBLIC mempool.
+- Research forced on; 30-market seasons scored on markets 6–30, as H1.
+- **All forecasters use the rule under test.** The single-deviator case is descriptive.
+- Rules: {capped (the Phase 1–3a rule), naive, twap, random, expectiminimax at depth 3}, each with predators {0, 1}, on the same 200 seeds.
+- Rules 1–4 and 6 above apply. All cells share seeds, so statistics combining cells are bootstrapped over seeds jointly.
+
+**Statistics.**
+- P(s) = researchers' total trading PnL per researcher-market under rule s with 1 predator.
+- **R4 = P(expectiminimax) / max over s in {capped, naive, twap, random} of P(s).** The max is taken inside each bootstrap resample, so choosing the best baseline is part of the statistic.
+- L(s) = 1 − P(s, 1 predator) / P(s, 0 predators), the same leakage ratio as H1. **ΔL = L(expectiminimax) − L(capped).**
+
+| Verdict | Condition |
+|---|---|
+| **Supported** | CI(R4) entirely ≥ 1.05 **and** CI(ΔL) entirely < 0 |
+| **Contradicted** | CI(R4) entirely ≤ 1.00 |
+| **Partly supported** | anything else |
+
+**Fixed before running.**
+- The search's model parameters: depth 3; the competitor push κ, measured on the no-predator PUBLIC baseline by a committed script; the grid of the policy table. They are fixed in `base.yaml`, with rationale, in the commit that adds the rule.
+- If runtime forces a smaller depth or a coarser grid, the change is made before any E4 outcome is seen, logged and disclosed.
+
+**Risk stated in advance.** With rho = 1, ten researchers race on one shared signal; 53% of their requested shares revert in the no-predator baseline. The search may rationally send everything at once, making the search rule behave like `naive`. That outcome is reported as it falls.
+
+**Descriptive, never a verdict:**
+- R4 with 0 predators (execution vs crowding);
+- predator PnL, truth lost, fill and revert rates per rule;
+- search depth {1, 2, 3, 4};
+- predator latency {0.05, 0.2, 0.5} for capped vs expectiminimax;
+- the single deviator;
+- nodes expanded and runtime with and without pruning.
