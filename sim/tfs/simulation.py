@@ -29,6 +29,7 @@ from tfs.agents.public_news import PublicNewsTrader
 from tfs.agents.slicing import make_slice_rule
 from tfs.agents.trend import TrendFollower
 from tfs.agents.whale import WhaleManipulator
+from tfs.agents.whale import yes_target as whale_yes_target
 from tfs.core.config import SimConfig
 from tfs.core.information import (
     ForecasterTraits,
@@ -137,9 +138,8 @@ def build_agents(
 
     wc = a.whale
     for j in range(wc.count):
-        # E5 scenario: backing the wrong side means holding the true outcome's price at `target`
-        yes_target = (wc.target if outcome == 1 else 1.0 - wc.target) if wc.against_truth else wc.target
-        agents.append(WhaleManipulator(f"whale_{j}", b[Venue.MAIN], wc.budget, yes_target, wc.start, wc.end, wc.budget))
+        target = whale_yes_target(wc, outcome if outcome is not None else 1)
+        agents.append(WhaleManipulator(f"whale_{j}", b[Venue.MAIN], wc.budget, target, wc.start, wc.end, wc.budget))
 
     batched = MempoolPolicy(cfg.mempool.policy).batched
     memories = list(predator_memories) or [PredatorMemory() for _ in range(a.predators.count)]

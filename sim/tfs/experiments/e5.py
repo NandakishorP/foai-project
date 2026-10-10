@@ -11,6 +11,10 @@ Per run, over the window [start, end + AFTER):
 - ticks_off: ticks with |price − p*_avail| ≥ ε;
 - correction_time: ticks from the whale's last trade until the price is within ε of
   p*_avail for good (AFTER if never): how fast informed traders and arbitrageurs undo it;
+- target_wrong_side: the share of the whale's window in which its target was on the wrong
+  side of p*_avail, i.e. further from the true outcome than the best estimate from the
+  information that exists. This *verifies* that the whale pushes against the information
+  (manipulation) rather than assuming it;
 - whale_pnl: the whale's profit (negative = its loss);
 - pnl_<kind>: profit by agent kind and the market makers'; the paired difference to the
   twin says who collected the whale's loss.
@@ -26,6 +30,7 @@ from pathlib import Path
 import numpy as np
 
 from tfs.core.config import SimConfig, SweepPoint, expand_sweep, load_raw
+from tfs.agents.whale import yes_target
 from tfs.core.types import Venue
 from tfs.experiments.shock_study import _diff_ci, _mean_ci, _write
 from tfs.simulation import run_season
@@ -50,7 +55,10 @@ def study_one(task: tuple[SimConfig, int]) -> tuple[dict[str, float], np.ndarray
     else:
         outside = np.flatnonzero(~after)
         correction = 0.0 if outside.size == 0 else float(outside[-1] + 1)
+    truth = 1 if m.y == 1 else -1
+    wrong_side = truth * (yes_target(w, m.y) - m.p_avail[w.start:w.end]) < 0  # target further from the outcome than p*_avail
     row = {
+        "target_wrong_side": float(wrong_side.mean()),
         "deviation_ticks": float(gap[lo:hi].sum()),
         "max_deviation": float(gap[lo:hi].max()),
         "ticks_off": float((gap[lo:hi] >= eps).sum()),

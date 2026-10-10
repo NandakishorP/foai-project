@@ -23,8 +23,18 @@ PEAS
 from __future__ import annotations
 
 from tfs.agents.base import Agent, Observation
+from tfs.core.config import WhaleConfig
 from tfs.core.types import Side, Trade, Tx, Venue
 from tfs.market.lmsr import affordable_shares, logit
+
+
+def yes_target(cfg: WhaleConfig, outcome: int) -> float:
+    """The YES price the whale defends. In the E5 scenario (against_truth) it backs the wrong
+    outcome: it holds the price of the outcome that will happen at `target`. The scenario
+    chooses this side; the whale itself never observes the outcome."""
+    if not cfg.against_truth:
+        return cfg.target
+    return cfg.target if outcome == 1 else 1.0 - cfg.target
 
 
 class WhaleManipulator(Agent):
