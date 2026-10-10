@@ -490,6 +490,19 @@ E3's core comparison is a 2×2: {predators 0, 1} × {PUBLIC, ZK_BATCH}. It separ
 
 ---
 
+## D-040 — Exploratory results X-1..X-3 and finding F-002 (EXPLORATORY; verdicts unchanged)
+**Date:** 2026-10-10 · `docs/report/exploratory/README.md`, `docs/report/findings/F-002_rent_dissipation/README.md`. Runs at `f98a78e`, clean.
+
+- **X-1:**
+  - r = 0 gives a self-destroying predator (−178 per market; informed traders gain; in E2b participation rises to 89%).
+  - r = 0.5 gives a viable, more aggressive predator: E2b G = 10.4 pp [8.8, 12.1], Δ = +18% [+14, +24].
+  - **H2's rule outcome is sensitive to predator aggressiveness.** At r = 0.5 it would read "partly supported", not "contradicted". The pre-registered verdict stands; this sensitivity is disclosed (DISCLOSURES.md).
+- **X-2:** the gap does not widen over 60 markets (6.0 → 5.3 → 5.1 → 4.7 pp).
+- **X-3:** researcher crowding is robust to staggered arrival (50% of researcher trades revert vs 56%). Predators gain slightly (E2b G = 8.4 pp).
+- **F-002 written:** competition among identically informed researchers dissipates research rents (Holden & Subrahmanyam 1992, verified on RePEc). Predators tax a small pie.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

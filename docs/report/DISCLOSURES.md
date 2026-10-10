@@ -24,5 +24,8 @@ Source: D-032; ratification D-037. Committed before any E2 run (`b803d95`, amend
 - The reference predator holds rather than sandwiches; the sandwich variant is reported (higher leakage, about 0.28).
 - Identical predators bid identically, so the same one always wins the slot; several predators of the same type therefore behave much like one.
 
+## Sensitivity of the H2 verdict (must appear next to the verdict in the report)
+H2 was **contradicted** at the pre-registered reference predator (r = 1): participation gap 6.0 pp [4.5, 7.6], Δ truth lost +11% [+6, +17]. In exploratory X-1, a more aggressive but still profitable predator (r = 0.5) gives 10.4 pp [8.8, 12.1] and +18% [+14, +24]. The same rule would read that as **partly supported**. Neither setting comes near "supported" (≥ 25 pp and > +30%). The verdict stands as pre-registered; its sensitivity to predator aggressiveness is a limitation (D-040).
+
 ## Exploratory analyses
 Everything under `docs/report/exploratory/` is exploratory. It was not pre-registered and never alters a verdict.

@@ -1,0 +1,12 @@
+{
+  "git": {
+    "commit": "f98a78eddf94416648933c6103af8d526a8846d2",
+    "dirty": false
+  },
+  "seeds": [
+    0,
+    199
+  ],
+  "n_points": 4,
+  "config": "sim/experiments/configs/exploratory/x3_stagger_e2a.yaml"
+}
