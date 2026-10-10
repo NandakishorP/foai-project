@@ -1,0 +1,13 @@
+# E3-E (PREREGISTRATION H3 overall, 2x2 interaction): endogenous research on the frozen season
+# baseline (D-030), 30 markets, scored on markets 21-30. {PUBLIC, ZK_BATCH} x {0, 1 predator}, K = 5.
+extends: season_baseline.yaml
+name: e3_e
+analysis:
+  hypothesis: null
+  note: "per-policy paired statistics; H3 verdicts come from `python -m tfs h3`"
+  score_from_market: 20
+  pair_on: agents.predators.count
+sweep:
+  crossed:
+    mempool.policy: [public, zk_batch]
+    agents.predators.count: [0, 1]

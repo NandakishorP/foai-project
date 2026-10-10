@@ -112,9 +112,10 @@ def analyse(points: Sequence[SweepPoint], results: Sequence[Sequence[RunResult]]
 
     hypothesis = analysis.get("hypothesis")
     if hypothesis is None:
-        summary = {"EXPLORATORY": "not pre-registered; never alters a verdict (DECISIONS D-037/D-039)",
+        note = analysis.get("note")  # e.g. E3: verdicts come from a separate pre-registered analysis
+        summary = {"note" if note else "EXPLORATORY": note or "not pre-registered; never alters a verdict (DECISIONS D-037/D-039)",
                    "windows": [f"{a + 1}-{b + 1}" for a, b in windows], "points": len(scored)}
-        (out_dir / "exploratory.json").write_text(json.dumps(summary, indent=2))
+        (out_dir / ("analysis.json" if note else "exploratory.json")).write_text(json.dumps(summary, indent=2))
         return summary
 
     reference = analysis["reference"]

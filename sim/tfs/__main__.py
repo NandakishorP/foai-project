@@ -109,6 +109,15 @@ def cmd_replay(args: argparse.Namespace) -> None:
     print(f"wrote {text}\nwrote {png}")
 
 
+def cmd_h3(args: argparse.Namespace) -> None:
+    from tfs.experiments.h3 import run
+
+    summary = run(args.out / "e3_f", args.out / "e3_k", args.out / "e3_e", args.out / "e3")
+    for name in ("H3a", "H3b", "H3c", "H3_overall"):
+        print(f"{name}: {summary[name]['verdict']}")
+    print(f"wrote {args.out / 'e3' / 'h3_verdicts.json'}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m tfs")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -133,6 +142,10 @@ def main() -> None:
     pm.add_argument("--market", type=int, default=0)
     pm.add_argument("--out", type=Path, default=None)
     pm.set_defaults(func=cmd_plot_market)
+
+    h3p = sub.add_parser("h3", help="pre-registered H3 verdicts from the E3-F, E3-K and E3-E runs")
+    h3p.add_argument("--out", type=Path, default=Path("results"))
+    h3p.set_defaults(func=cmd_h3)
 
     rp = sub.add_parser("replay", help="explain a front-run block by block")
     rp.add_argument("config", type=Path)

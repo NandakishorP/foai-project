@@ -1,0 +1,23 @@
+# E3-V (descriptive variants, never a verdict): research forced on, markets 6-30, K = 5.
+# Around a ZK_BATCH baseline, each with 0 and 1 predator: private relay; commit-reveal; relayer
+# (sender hidden); griefer; free-option pair; predator with own_impact_reversion 0.5.
+extends: base.yaml
+name: e3_v
+season:
+  n_markets: 30
+mempool:
+  policy: zk_batch
+analysis:
+  hypothesis: null
+  note: "descriptive variants (PREREGISTRATION H3, E3-V)"
+  score_from_market: 5
+  pair_on: agents.predators.count
+sweep:
+  crossed:
+    agents.predators.count: [0, 1]
+  one_at_a_time:
+    mempool.policy: [private_relay, commit_reveal]
+    mempool.sender_visible: [false]
+    agents.attackers.non_reveal: [1]
+    agents.attackers.free_option: [1]
+    agents.predators.own_impact_reversion: [0.5]

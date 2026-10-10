@@ -1,0 +1,20 @@
+# E3-V (descriptive): what the validity proof adds over the strongest commit-reveal. The spam
+# committer (insolvent orders) is possible only without the proof; compared under both policies.
+extends: base.yaml
+name: e3_v_cr
+season:
+  n_markets: 30
+mempool:
+  policy: commit_reveal
+analysis:
+  hypothesis: null
+  note: "descriptive variants (PREREGISTRATION H3, E3-V): commit-reveal attackers"
+  score_from_market: 5
+  pair_on: agents.predators.count
+sweep:
+  crossed:
+    mempool.policy: [commit_reveal, zk_batch]
+    agents.predators.count: [0]
+  one_at_a_time:
+    agents.attackers.spam: [1]
+    agents.attackers.non_reveal: [1]

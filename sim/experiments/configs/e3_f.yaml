@@ -1,0 +1,17 @@
+# E3-F (PREREGISTRATION H3a, H3b): research FORCED ON, 30-market seasons, scored on markets 6-30.
+# The 2x2 {PUBLIC, ZK_BATCH} x {0, 1 predator} at the reference batch interval K = 5.
+# PUBLIC arm predator: the reference predator (D-034). ZK arm: the metadata copy-trader (D-047).
+# Verdicts: `python -m tfs h3` (joint paired bootstrap over seeds across cells and experiments).
+extends: base.yaml
+name: e3_f
+season:
+  n_markets: 30
+analysis:
+  hypothesis: null
+  note: "per-policy paired statistics; H3 verdicts come from `python -m tfs h3`"
+  score_from_market: 5
+  pair_on: agents.predators.count
+sweep:
+  crossed:
+    mempool.policy: [public, zk_batch]
+    agents.predators.count: [0, 1]

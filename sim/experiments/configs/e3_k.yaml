@@ -1,0 +1,18 @@
+# E3-K (PREREGISTRATION H3c): ZK_BATCH with batch interval K in {1, 2, 5, 10, 20}, 0 and 1 predator,
+# research forced on, markets 6-30. Compared with the PUBLIC cells of E3-F on the same seeds.
+extends: base.yaml
+name: e3_k
+season:
+  n_markets: 30
+mempool:
+  policy: zk_batch
+analysis:
+  hypothesis: null
+  note: "per-K paired statistics; H3c verdict comes from `python -m tfs h3`"
+  score_from_market: 5
+  pair_on: agents.predators.count
+sweep:
+  crossed:
+    agents.predators.count: [0, 1]
+  one_at_a_time:
+    mempool.batch_interval: [1, 2, 5, 10, 20]
