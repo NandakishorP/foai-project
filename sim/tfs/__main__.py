@@ -53,6 +53,38 @@ def cmd_run(args: argparse.Namespace) -> None:
         print(json.dumps(result.verdict, indent=2))
 
 
+def _parse(value: str) -> object:
+    """A CSV cell back to its Python value (numbers, None, booleans, otherwise text)."""
+    if value in ("None", ""):
+        return None
+    if value in ("True", "False"):
+        return value == "True"
+    for kind in (int, float):
+        try:
+            return kind(value)
+        except ValueError:
+            pass
+    return value
+
+
+def cmd_charts(args: argparse.Namespace) -> None:
+    """Redraw an experiment's charts from its saved summary.csv and per_market.csv (no rerun)."""
+    import csv
+
+    from tfs.core.config import expand_sweep
+
+    raw = load_raw(args.config)
+    out_dir = args.out / raw["name"]
+
+    def rows(name: str) -> list[dict]:
+        with (out_dir / name).open() as fh:
+            return [{k: _parse(v) for k, v in r.items()} for r in csv.DictReader(fh)]
+
+    result = ExperimentResult(raw["name"], out_dir, expand_sweep(raw), rows("summary.csv"), rows("per_market.csv"), [])
+    for path in _charts(result, args.config):
+        print(f"wrote {path}")
+
+
 def cmd_plot_market(args: argparse.Namespace) -> None:
     cfg = load_config(args.config)
     season = run_season(cfg, args.seed)
@@ -179,6 +211,11 @@ def main() -> None:
 
     common(cb := sub.add_parser("calibrate-baseline", help="baseline rho and cost calibration (D-026)"))
     cb.set_defaults(func=cmd_calibrate_baseline)
+
+    ch = sub.add_parser("charts", help="redraw an experiment's charts from its saved CSVs")
+    ch.add_argument("config", type=Path)
+    ch.add_argument("--out", type=Path, default=Path("results"))
+    ch.set_defaults(func=cmd_charts)
 
     pm = sub.add_parser("plot-market", help="plot one market of one seed")
     pm.add_argument("config", type=Path)

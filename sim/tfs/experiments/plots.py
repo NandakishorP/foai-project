@@ -173,7 +173,7 @@ def plot_ofat(
             ax = axes[r, c]
             for g_index, group in enumerate(groups):
                 rows = [row for row in summary if row[group_by] == group and _varies_only(row, param, baseline[group], swept)]
-                rows.sort(key=lambda row: row[param])
+                rows.sort(key=lambda row: (row[param] is None, row[param] or 0))  # None ("all") goes last
                 xs = np.arange(len(rows)) + (g_index - (len(groups) - 1) / 2) * 0.08
                 ys = np.array([row[metric] for row in rows], dtype=float)
                 err = np.array([[y - row[f"{metric}_lo"], row[f"{metric}_hi"] - y] for y, row in zip(ys, rows)]).T
@@ -200,6 +200,8 @@ def _varies_only(row: dict[str, Any], param: str, baseline: dict[str, Any], swep
 
 
 def _fmt(value: Any) -> str:
+    if value is None:
+        return "all"  # e.g. execution.users = None: every forecaster
     if isinstance(value, float) and math.isfinite(value) and value == int(value):
         return str(int(value))
     return str(value)
