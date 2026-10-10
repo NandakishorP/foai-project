@@ -882,6 +882,34 @@ H3c contradicted on its "compounds beyond 3K" branch. ΔT is not monotone in K. 
 
 ---
 
+## D-057 — Exploratory X-4 and X-5: designs fixed before their runs (EXPLORATORY; no verdict can change)
+**Date:** 2026-10-10 · Code `036dc8a` (merged in `75cb203`). Configs `x4.yaml` and `x5.yaml`; analysis scripts in `docs/report/exploratory/x4/` and `x5/`.
+
+**X-4: limit-respecting marginal clearing** (owner, D-052).
+- `clear_batch(rule="marginal")`: the same price ladder, fixed point and pro-rata margin as D-046. The uniform price is the LMSR's *post-trade marginal* price for the imbalance, not its average price.
+  - The market therefore ends exactly at the clearing price, never past a filled limit (property-tested).
+  - Traders pay the marginal price. The LMSR keeps the surplus (marginal − average) × |D| ≥ 0, recorded per market as `lmsr_surplus`.
+- **Runs:** the E3-F setting (research forced, markets 6–30, K = 5), {PUBLIC, COMMIT_REVEAL, ZK_BATCH} × {0, 1} predator, 200 seeds paired with E3-F's average-clearing cells.
+- **Reported:** truth lost, fills, researcher profit, the predator's take (PnL and leakage), the surplus.
+- **FastEngine only.** The Solidity SealedBatchAuction keeps the pre-registered average rule.
+
+**X-5: crowd-aware order splitting** (owner, D-056; time-boxed).
+- **The game gains a CHANCE layer between MAX and MIN:** the same-signal crowd trades ahead of MAX's slice in the same block.
+  - Its five equally likely outcomes were measured on the no-predator capped baseline (`tfs measure-env`, 50 seeds, 337 trading blocks): the 10th–90th percentiles of the share of forecaster 0's gap that the other forecasters close before its own order executes, namely **0, 0.156, 0.647, 0.963, 1.0**.
+  - The rest of the block's closure by everyone else is **κ_rest = 0.016**. So most of κ = 0.87 is the crowd trading ahead in the same block.
+- **A slice that the crowd has already pushed past its limit reverts and earns nothing.**
+- **The depth-cut-off heuristic is averaged over the crowd outcomes.** Found by a test: a crowd-blind heuristic credits profit the crowd would take.
+- **Depth 2**, set from runtime alone before any X-5 run: depth 3 costs about 8 minutes per season, depth 2 about 105 s.
+  - E4-V showed that depth barely matters for the plain search.
+  - E4-V's depth-2 point gives the matched comparison. Depth 1 runs as a variant.
+- **Post-crowd prices are snapped to the same 0.01 grid**, so the transposition table stays exact.
+- **Runs:** the E4 setting, every forecaster using the rule, plus the single deviator, {0, 1} predator, 200 seeds. Compared with E4's capped, TWAP and search cells on the same seeds.
+- **Limitation:** the crowd's distribution is measured with the competitors using the capped rule. When everyone searches, the crowd behaves differently, and the model does not adapt. The single deviator is the case where the measured crowd is exactly right.
+
+**Defaults are unchanged** (average clearing, no crowd node). The E4 game is arithmetically identical, so earlier results reproduce exactly (digest test).
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3; implemented in Phase 3b as D-053.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
