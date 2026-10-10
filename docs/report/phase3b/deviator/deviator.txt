@@ -1,0 +1,3 @@
+forecaster 0 PnL per market: capped like everyone 5.247, lone searcher 5.302; paired difference +0.055 [-0.214, +0.313]
+the other nine (capped) per forecaster: 5.059 -> 5.031
+100 seeds, markets 6-30, one reference predator
