@@ -1,6 +1,6 @@
 # Pre-registration of Hypothesis Verdict Criteria
 
-**Status: BINDING for H1 and H2.** Committed before any E2a or E2b run, and before any predator code exists. git history is the evidence. H3 is pre-registered separately, before E3 runs.
+**Status: BINDING for H1, H2 and H3.** Committed before any E2a or E2b run, and before any predator code exists. git history is the evidence. H3 is pre-registered separately, before E3 runs.
 
 **Frozen baseline.** Commit `067fa2f` (DECISIONS D-030): `sim/experiments/configs/base.yaml` and `season_baseline.yaml`.
 - Correlated research with rho = 1: one shared research signal, the textbook Grossman–Stiglitz setting.
@@ -62,6 +62,52 @@ Notes fixed in advance:
 
 ---
 
-## H3 — Defense (E3)
+## H3 — Defense (E3) — BINDING
 
-To be pre-registered before E3 runs (Phase 3).
+*A ZK sealed batch auction restores research participation and accuracy, at a measurable cost in reaction speed and execution delay.*
+
+Thresholds were proposed by Claude and ratified by the owner (approval of the Phase 3a plan, 2026-10-10). Committed before any Phase 3a code or run (DECISIONS D-046).
+
+**Setting.**
+- The frozen baseline (D-030) plus the defense design of D-046: uniform-price batches with a pro-rata margin; sealed buy orders; commit senders visible.
+- Reference batch interval K = 5 blocks (about one minute of 12-second blocks).
+- PUBLIC arm predator: the pre-registered reference predator (D-034). ZK_BATCH arm predator: the metadata copy-trader, whose parameters are fixed with rationale in its own commit before any E3 run.
+- Rules 1–4 and 6 above apply. All four cells of a 2×2 run on the same seeds, so statistics combining cells are bootstrapped over seeds jointly.
+
+**Experiments.**
+- **E3-F:** research forced on, 30-market seasons, scored on markets 6–30.
+- **E3-E:** endogenous research, 30-market seasons, scored on markets 21–30.
+
+### H3a — residual leakage (E3-F, K = 5)
+- L_PUB and L_ZK: leakage ratios, each against the 0-predator twin under the same policy. R = L_ZK / L_PUB.
+- **Supported:** CI(R) entirely ≤ 0.5. **Contradicted:** CI(R) entirely ≥ 0.9. **Partly supported:** otherwise.
+- Residual L_ZK is reported with its CI.
+
+### H3b — anti-crowding (E3-F, K = 5, 0 predators)
+- P = researcher profit per researcher-market, ratio ZK / PUBLIC.
+- U = researchers' unfilled share of requested shares: PUBLIC = shares of reverted trades; ZK = requested − filled, including pro-rata shortfall.
+- **Supported:** CI(P) entirely ≥ 1.10 **and** CI(U_PUB − U_ZK) entirely ≥ 10 pp.
+- **Contradicted:** CI(P) entirely ≤ 1.00.
+- **Partly supported:** otherwise.
+
+### H3c — cost vs K (E3-F, 0 predators; the 1-predator arm reported alongside)
+- T = restricted mean time-to-ε after the shock: a run that never settles counts as the full window. ΔT(K) = T_ZK(K) − T_PUB, with K ∈ {1, 2, 5, 10, 20}.
+- **Supported:** CI(ΔT(5)) entirely > 0 **and** CI(ΔT(20) − ΔT(1)) entirely > 0 **and** upper CI(ΔT(5)) ≤ 10 ticks (2K).
+- **Contradicted:** CI(ΔT(5)) entirely ≤ 0 **or** entirely > 15 ticks (3K).
+- **Partly supported:** otherwise.
+- Fill rate vs K is reported, descriptively.
+
+### H3 overall (E3-E, K = 5)
+- **Supported:** H3a supported **and** H3c not contradicted **and** CI(RMS_truth(ZK,1) / RMS_truth(PUB,1) − 1) entirely < 0 **and** CI(participation(ZK,1) − participation(PUB,1)) entirely > 0.
+- **Contradicted:** H3a contradicted **or** CI(RMS_truth(ZK,1) / RMS_truth(PUB,1) − 1) entirely ≥ 0.
+- **Partly supported:** otherwise.
+
+### 2×2 interaction (descriptive, never a verdict)
+For truth-lost MSE, participation and researcher profit (E3-E and E3-F):
+- total benefit = cell(PUB,1) − cell(ZK,1);
+- anti-crowding = cell(PUB,0) − cell(ZK,0);
+- anti-predator = [cell(PUB,1) − cell(PUB,0)] − [cell(ZK,1) − cell(ZK,0)];
+- total = anti-crowding + anti-predator exactly. Shares are reported with joint bootstrap CIs.
+
+### Variants (E3-V, descriptive only)
+Relayer (sender hidden); PRIVATE_RELAY; COMMIT_REVEAL with escrow and slashing; the non-reveal, free-option and spam attackers; a predator with r = 0.5 in both arms.

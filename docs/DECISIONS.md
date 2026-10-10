@@ -587,6 +587,31 @@ After resolution: payouts per account (|Δ| ≤ 1e-4) and market-maker PnL per v
 
 ---
 
+## D-046 — Phase 3a defense design (owner answers in plan mode) and H3 pre-registration
+**Date:** 2026-10-10 · Plan approved, which ratifies the H3 thresholds. H3 is in `docs/PREREGISTRATION.md`, committed before any Phase 3a code or run.
+
+1. **Batch clearing: uniform price with a pro-rata margin (replaces D-004's drop rule).**
+   - Each order is normalised to a YES-price bound: buy-YES fills iff p ≤ L; buy-NO fills iff p ≥ 1 − L_NO.
+   - The clearing price p* is the fixed point where the LMSR's average price for the net imbalance D(p*) equals p*. Orders strictly inside fill fully; orders whose bound equals p* fill pro-rata.
+   - Budget balance as in D-004: YES pays p*, NO pays 1 − p*, matched pairs become complete sets, only D trades with the LMSR.
+   - Solved by bisection, identically in Python and Solidity.
+   - **Reason:** with rho = 1 researchers send identical limits, so D-004's "drop every violated order" empties whole batches.
+2. **Sealed orders are buys only** (as in the SPEC §5 circuit). Exposure is reduced by buying the other side; YES+NO pairs are merged back to cash.
+3. **Policies act on the main market.** The reference venue stays continuous and public. Under batching the arbitrageur is legged: its main leg clears in the batch, and the reference leg follows in the next block.
+4. **Metadata in the reference setting:** commits come from the trader's own address, so a predator sees sender, block and escrow tier, not contents. Relayer variant: sender hidden.
+5. **Timing:** a K-block commit window, then reveal and clearing in the next block; one order per identity per batch.
+6. **Escrow tiers:** {5, 25, 125, 625} USDC, unused part refunded, non-revealers slashed.
+7. **Monte Carlo treatment of ZK:**
+   - validity enforced;
+   - proving time adds a delay of ceil(bb prove seconds / 12) ticks;
+   - real proofs only in the on-chain integration tests.
+8. **The ZK-arm predator is a metadata copy-trader:**
+   - from commit metadata (sender, tier) and per-address posteriors built from revealed orders, it infers the informed direction;
+   - it joins the same batch, so it gets the same uniform price and cannot front-run;
+   - it unwinds later (r = 1).
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
