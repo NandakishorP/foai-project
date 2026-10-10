@@ -16,6 +16,14 @@ Everything a reader needs to judge whether the results were steered. Each item p
 - Leakage ratio = share of the informed traders' no-predator edge *lost* with predators.
 Source: D-032; ratification D-037. Committed before any E2 run (`b803d95`, amended `c677dab`).
 
+## Differential-test tolerance amended after the first run (Phase 2b)
+The D-043 tolerances were stated before the test existed. After the first run (D-043 amendment):
+1. The MM-PnL tolerance became n_trades × 1e-6, derived from per-trade rounding in the market maker's favour. The original fixed 1e-4 was mis-specified.
+2. Both engines receive the same 6-decimal-quantized orders.
+3. Trades whose average price is within 1e-6 of their limit have their fill/revert decision pinned to FastEngine's and are listed (7 in the predator market). Predators deliberately push victims onto their limits, below the chain's one-unit resolution.
+
+Every other comparison stays at full strictness, and any fill/revert disagreement away from a limit fails the test.
+
 ## Runs that failed or were repeated
 - E2a first attempt crashed (overflow) and wrote no results; fixed and rerun from a clean commit (D-035).
 

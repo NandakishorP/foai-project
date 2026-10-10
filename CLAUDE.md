@@ -35,13 +35,15 @@ An adversarial multi-agent simulation of an on-chain prediction market. Informed
 - Keep dependencies minimal; add new ones only with a reason in `docs/DECISIONS.md`.
 
 ## Commands (fill in as the project grows)
-- Python env (once): `uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e ".[dev]"`
+- Python env (once): `uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e ".[dev,evm]"`
 - Python tests: `.venv/bin/pytest -q`
 - Run an experiment: `.venv/bin/python -m tfs run sim/experiments/configs/e1.yaml` (outputs in `results/<name>/`)
 - One market plot: `.venv/bin/python -m tfs plot-market sim/experiments/configs/base.yaml --seed 1`
 - Cost calibration: `.venv/bin/python -m tfs calibrate-costs sim/experiments/configs/calibrate_costs.yaml`
 - Foundry (project-local stable v1.4.4, never the global foundry-zksync): `make foundry`, then `make foundry-version`
-- Contract tests: `cd contracts && ../.tools/foundry/bin/forge test`
+- Contract tests: `make contract-test` (forge unit + invariant tests, project-local Foundry)
+- FastEngine vs EvmEngine: `make difftest` (slow scenarios; the fast fuzz scenario runs in `pytest -q`)
+- On-chain replay: `.venv/bin/python -m tfs replay sim/experiments/configs/e2a.yaml --seed 3 --market 15 --engine evm`
 - Circuit tests: `cd circuits/sealed_order && nargo test`
 - Dashboard: `streamlit run dashboard/app.py`
 

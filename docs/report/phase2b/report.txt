@@ -1,0 +1,10 @@
+fuzz (60 blocks, fees, bundles, protection): PASS | 60 blocks, 224 trades | max |Δprice| 2.22e-16 (tol 1e-06), max |Δcash| 1.30e-05 (tol 1e-04), max |Δshares| 1.07e-14 (tol 1e-05), payouts 1.30e-05, MM PnL 4.25e-05 (tol 2.2e-04) | flag mismatches 0, boundary cases 0
+E2a predator market (seed 3, market 16): PASS | 200 blocks, 1264 trades | max |Δprice| 5.27e-16 (tol 1e-06), max |Δcash| 8.67e-05 (tol 1e-04), max |Δshares| 5.68e-14 (tol 1e-05), payouts 8.67e-05, MM PnL 3.01e-04 (tol 1.3e-03) | flag mismatches 0, boundary cases 7
+    boundary (pinned): block 2: forecaster_1 yes -5.4537 avg 0.662238354 vs limit 0.662238352 -> fill
+    boundary (pinned): block 7: forecaster_4 yes -3.2578 avg 0.662238356 vs limit 0.662238352 -> fill
+    boundary (pinned): block 9: forecaster_9 yes -20.0000 avg 0.521683644 vs limit 0.521683638 -> fill
+    boundary (pinned): block 10: forecaster_9 yes +11.6490 avg 0.521683644 vs limit 0.521683638 -> revert
+    boundary (pinned): block 10: forecaster_7 yes +11.6490 avg 0.521683644 vs limit 0.521683638 -> revert
+    boundary (pinned): block 12: forecaster_8 no +5.0063 avg 0.478316354 vs limit 0.478316362 -> fill
+    boundary (pinned): block 13: forecaster_6 no -15.2849 avg 0.478316353 vs limit 0.478316362 -> revert
+season baseline, no predators (seed 1, market 1): PASS | 200 blocks, 988 trades | max |Δprice| 3.61e-16 (tol 1e-06), max |Δcash| 3.04e-05 (tol 1e-04), max |Δshares| 2.84e-14 (tol 1e-05), payouts 3.04e-05, MM PnL 2.38e-04 (tol 9.9e-04) | flag mismatches 0, boundary cases 0

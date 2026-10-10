@@ -98,12 +98,7 @@ def replay(cfg: SimConfig, seed: int, market: int, out_dir: Path) -> tuple[Path,
     trace: list[BlockTrace] = []
     season = run_season(cfg, seed, trace_market=market, trace=trace)
     record = season.markets[market]
-    chosen, largest = None, 0.0
-    for block in trace:
-        receipts = {id(t): r for t, r in zip(_flat(block), block.receipts)}
-        for request, _ in block.plan.placements:
-            if receipts[id(request.front)].ok and request.front.shares > largest:
-                chosen, largest = block, request.front.shares
+    chosen = choose_block(trace)
     if chosen is None:
         raise SystemExit(f"no filled front-run in market {market} of seed {seed}")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -112,6 +107,51 @@ def replay(cfg: SimConfig, seed: int, market: int, out_dir: Path) -> tuple[Path,
     png = plot_block(record, chosen, f"{cfg.name}: seed {seed}, market {market + 1}, block {chosen.tick}",
                      out_dir / f"replay_seed{seed}_m{market}_block{chosen.tick}.png")
     return text_path, png
+
+
+def choose_block(trace: list[BlockTrace]) -> BlockTrace | None:
+    """The block with the largest filled front-run (the most illustrative one)."""
+    chosen, largest = None, 0.0
+    for block in trace:
+        receipts = {id(t): r for t, r in zip(_flat(block), block.receipts)}
+        for request, _ in block.plan.placements:
+            if receipts[id(request.front)].ok and request.front.shares > largest:
+                chosen, largest = block, request.front.shares
+    return chosen
+
+
+def replay_on_chain(cfg: SimConfig, seed: int, market: int, out_dir: Path) -> Path:
+    """Reproduce the replayed block on Anvil: every block of the market is sent to the real
+    contracts in the builder's order (differential-test harness), and the chosen block's
+    trades are printed with FastEngine and on-chain outcomes side by side."""
+    from tfs.core.types import Venue as V
+    from tfs.engines.differential import compare, traced_market
+
+    trace: list[BlockTrace] = []
+    run_season(cfg, seed, trace_market=market, trace=trace)
+    chosen = choose_block(trace)
+    if chosen is None:
+        raise SystemExit(f"no filled front-run in market {market} of seed {seed}")
+    cash, blocks, y = traced_market(cfg, seed, market)
+    report = compare(f"{cfg.name} seed {seed} market {market + 1}", {V.MAIN: cfg.market.b_main, V.REF: cfg.market.b_ref},
+                     cash, blocks, y, cfg.mempool.base_fee, capture_block=chosen.tick)
+    assert report.captured is not None
+    roles: dict[int, str] = {}
+    for request, victim in chosen.plan.placements:
+        roles[id(request.front)] = "FRONT-RUN"
+        roles[id(victim.tx)] = "VICTIM"
+    lines = [f"Block {chosen.tick} of market {market + 1}, seed {seed}: FastEngine vs Solidity contracts on Anvil", "",
+             f"{'':3s} {'agent':16s} {'trade':38s} {'fast':>6s} {'chain':>6s} {'fast price':>11s} {'chain price':>12s}  role"]
+    flat = _flat(chosen)
+    for i, (trade, fr, er) in enumerate(zip(flat, *report.captured), start=1):
+        lines.append(f"{i:2d}. {trade.agent_id:16s} {_describe(trade):38s} {str(fr.ok):>6s} {str(er.ok):>6s} "
+                     f"{fr.price_after:11.6f} {er.price_after:12.6f}  {roles.get(id(trade), '')}")
+    lines += ["", "Whole market: " + report.summary()]
+    lines += [f"  boundary decision pinned: {b}" for b in report.boundary_cases]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"replay_seed{seed}_m{market}_block{chosen.tick}_onchain.txt"
+    path.write_text("\n".join(lines) + "\n")
+    return path
 
 
 def _flat(block: BlockTrace) -> list[Trade]:

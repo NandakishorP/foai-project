@@ -41,6 +41,15 @@ def to_units(amount: float) -> int:
     return int(round(amount * USDC))
 
 
+def sell_units(amount: float) -> int:
+    """Units for a sell of `amount` shares (> 0), rounded toward zero.
+
+    The 1e-6-unit epsilon absorbs float representation error: 5.4537 * 1e6 evaluates to
+    5453699.999..., and a plain floor would silently drop one unit on every such sell.
+    """
+    return math.floor(amount * USDC + 1e-6)
+
+
 class EvmEngine(Engine):
     def __init__(self, liquidity: Mapping[Venue, float], initial_cash: Mapping[str, float], base_fee: float = 0.0) -> None:
         self.anvil = AnvilProcess(accounts=len(initial_cash) + 3).start()
@@ -226,7 +235,7 @@ class EvmEngine(Engine):
         if t.shares >= 0:
             amount = to_units(t.shares)
         else:
-            amount = -math.floor(-t.shares * USDC)  # toward zero: never sell a unit more than held
+            amount = -sell_units(-t.shares)  # toward zero: never sell a unit more than held
         limit = max(0, math.floor(t.limit_price * WAD))
         return (self.markets[t.venue].address, SIDE_INDEX[t.side], amount, limit, to_units(t.priority_fee),
                 t.revert_protected)

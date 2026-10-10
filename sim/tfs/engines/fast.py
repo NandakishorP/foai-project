@@ -104,6 +104,10 @@ class FastEngine(Engine):
     def liquidity(self, venue: Venue) -> float:
         return self._venues[venue].b
 
+    def quote(self, venue: Venue, side: Side, shares: float) -> float:
+        """Cash a trade would cost right now (negative = proceeds); no state change."""
+        return self._venues[venue].quote(side, shares)
+
     def builder_revenue(self) -> float:
         """Total fees and tips collected by the builder so far."""
         return self._accounts[BUILDER_ID].cash

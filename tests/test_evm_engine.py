@@ -53,3 +53,10 @@ def test_bundle_all_or_nothing(engine: EvmEngine) -> None:
                                                 Trade("b", Venue.MAIN, Side.NO, 2.0, 0.01)))])
     assert [r.ok for r in receipts] == [False, False]
     assert engine.balances()["b"].cash == pytest.approx(cash)
+
+
+def test_sell_conversion_survives_float_representation() -> None:
+    from tfs.engines.evm import sell_units
+
+    assert sell_units(5.4537) == 5_453_700  # 5.4537 * 1e6 == 5453699.999... in floating point
+    assert sell_units(1.0000004) == 1_000_000  # still rounds toward zero

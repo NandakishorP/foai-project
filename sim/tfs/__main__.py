@@ -97,6 +97,13 @@ def cmd_replay(args: argparse.Namespace) -> None:
     cfg = load_config(args.config)
     if args.predators is not None:
         cfg = replace_in(cfg, "agents.predators.count", args.predators)
+    if args.engine == "evm":
+        from tfs.experiments.replay import replay_on_chain
+
+        path = replay_on_chain(cfg, args.seed, args.market, args.out / cfg.name)
+        print(path.read_text())
+        print(f"wrote {path}")
+        return
     text, png = replay(cfg, args.seed, args.market, args.out / cfg.name)
     print(text.read_text())
     print(f"wrote {text}\nwrote {png}")
@@ -133,6 +140,8 @@ def main() -> None:
     rp.add_argument("--market", type=int, default=10, help="0-based market index in the season")
     rp.add_argument("--predators", type=int, default=1, help="override the number of predators")
     rp.add_argument("--out", type=Path, default=Path("results"))
+    rp.add_argument("--engine", choices=["fast", "evm"], default="fast",
+                    help="evm: reproduce the block on the Solidity contracts (Anvil)")
     rp.set_defaults(func=cmd_replay)
 
     args = parser.parse_args()
