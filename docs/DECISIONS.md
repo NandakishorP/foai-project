@@ -544,6 +544,11 @@ After resolution: payouts per account (|Δ| ≤ 1e-4) and market-maker PnL per v
 1. **MM PnL tolerance.** The market maker's PnL collects the rounding of *every* trade, and each rounds by at most one 6-decimal unit in its favour, whereas an account sees only its own trades. The tolerance is therefore n_trades × 1e-6 (at least 1e-4). The first no-predator run showed 2.3e-4 over 988 trades: within the derived bound, but outside the original fixed 1e-4. That 1e-4 had been mis-specified, not exceeded by an error.
 2. **Quantized replay.** Both engines now receive the same orders quantized to the chain's 6-decimal grid (amounts and fees; sells toward zero). In the first predator-market run the chain rounded amounts that FastEngine did not. That moved prices by about 1e-9 per trade, and because the predator deliberately pushes victims to exactly their limits, victims flipped from block 13 on and the states diverged (81 mismatches, 20 boundary cases). The no-predator market and the fuzz scenario passed without quantization. Quantizing the shared input removes a difference in *inputs*, not in market behaviour, so no tolerance is loosened.
 3. **Pinned boundary decisions.** Even with quantized input, the predator market diverged at block 10. The predator sized a front-run so its victim's average price landed *on* the victim's limit. FastEngine compares average prices to ~1e-9 and rejected the trade by ~1e-9; the chain compares cash in whole 6-decimal units and accepted it. Predators create such boundary decisions on purpose at every front-run, so they are inherent and not a bug. The harness now handles any trade whose average price is within 1e-6 of its limit as follows: FastEngine decides, the chain's copy gets a limit forcing the same decision, and the case is **counted and listed** in the report. Every other trade must agree exactly, so a fill/revert mismatch away from a limit still fails the test. Prices, cash, shares, payouts and MM PnL are then compared at full strictness.
+4. **Sealed-batch tolerance for fills (Phase 3a; disclosed, set after the first batch run).** The chain floors pro-rata margin fills to whole units and finds the imbalance by integer bisection. Batch states therefore drift apart in price by ~1e-8, within the 1e-6 price tolerance. A margin fill inverts the average-price curve, so it amplifies a state price difference Δp by about 2b/(p(1−p)) (about 1,000×).
+   - The first market run showed 1.8e-5 shares on a lone marginal order, against the 1e-5 share tolerance written for continuous trading.
+   - Each fill's allowance is now 2 units plus 2 × (pre-batch Δp) × 2b/(p(1−p)), computed from that batch's measured state difference. Each account's shares must stay within the sum of its own fills' allowances.
+   - Prices, cash, payouts and MM PnL keep their original tolerances, and any fill/no-fill disagreement above one unit remains a failure.
+   - An earlier draft of the per-account check derived its bound from the observed maximum, which is circular. It was replaced before any result was recorded.
 
 ---
 
@@ -666,6 +671,21 @@ After resolution: payouts per account (|Δ| ≤ 1e-4) and market-maker PnL per v
   - nullifiers and timing;
   - a fuzzed random-batch property test (conservation, dust only, price in (0, 1));
   - a **real UltraHonk proof end to end**: commit, replay rejected, reveal, clear; about 5.5M gas for the whole batch.
+
+---
+
+## D-050 — EvmEngine sealed batches and their differential test (Phase 3a step 6)
+**Date:** 2026-10-10 · `make difftest` now includes two batch scenarios; results in `docs/report/phase3a/difftest_report.txt`.
+
+- **EvmEngine:**
+  - `enable_batches(verifier_kind = mock | real | none)` deploys registry, verifier and auction. External libraries in the bb verifier (`ZKTranscriptLib`) are deployed and linked automatically.
+  - `commit` takes its commitment from the contract's own `commitmentOf` (Poseidon2, cross-checked against Noir).
+  - `clear_batch` mines the commitments, waits for the window to close, reveals and clears in one block, then merges YES+NO pairs, as FastEngine does.
+- **Differential (D-043 amendment 4), both PASS:**
+  - batch fuzz, 30 batches / 154 fills: Δprice 1.7e-9, Δcash 9.8e-6, Δfill 6e-7;
+  - a traced zk_batch market with the metadata predator and the attackers, 40 batches / 506 fills: Δprice 1.8e-8, Δcash 4.1e-5, Δfill 1.8e-5 (within its derived allowance);
+  - no fill/no-fill disagreements in either.
+- **Real-proof integration test** (`tests/test_zk_integration.py`, 2.4 s): identity registered on-chain → Merkle path from the registry → Noir/bb proof (root equals the contract's root) → commit through the real UltraHonk verifier (replay rejected by the nullifier) → reveal → clear → filled.
 
 ---
 

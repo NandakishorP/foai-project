@@ -34,3 +34,25 @@ def test_simulated_market(cfg_name: str, seed: int, market: int, predators: int)
     cash, blocks, y = traced_market(cfg, seed, market)
     _check(compare(cfg_name, {Venue.MAIN: cfg.market.b_main, Venue.REF: cfg.market.b_ref},
                    cash, blocks, y, cfg.mempool.base_fee))
+
+
+# ---- sealed batches (Phase 3a): FastEngine.clear_batch vs SealedBatchAuction ----
+
+def test_batch_fuzz_scenario() -> None:
+    from tfs.engines.differential import compare_batches, fuzz_batches
+
+    cash, batches = fuzz_batches(20, seed=1)
+    _check(compare_batches("batch fuzz", 100.0, cash, batches, 1, 5, [5.0, 25.0, 125.0, 625.0]))
+
+
+@pytest.mark.slow
+def test_batch_simulated_zk_market() -> None:
+    from tfs.engines.differential import compare_batches, traced_batches
+
+    cfg = load_config(CONFIG_DIR / "base.yaml")
+    for key, value in [("mempool.policy", "zk_batch"), ("agents.predators.count", 1),
+                       ("agents.attackers.non_reveal", 1), ("agents.attackers.free_option", 1)]:
+        cfg = replace_in(cfg, key, value)
+    cash, log, y = traced_batches(cfg, 3, 15)
+    _check(compare_batches("zk market", cfg.market.b_main, cash, log, y, cfg.mempool.batch_interval,
+                           list(cfg.mempool.escrow_tiers)))

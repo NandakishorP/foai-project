@@ -29,6 +29,7 @@ from tfs.core.config import SimConfig, replace_in
 from tfs.core.types import Account, Bundle, Receipt, Side, Trade, Tx, Venue
 from tfs.engines.evm import EvmEngine, sell_units
 from tfs.engines.fast import FastEngine
+from tfs.market.batch import SealedOrder
 from tfs.simulation import BlockTrace, run_season
 
 UNIT = 1e-6  # one USDC / share unit on chain
@@ -36,6 +37,7 @@ PRICE_TOL = 1e-6
 CASH_TOL = 1e-4
 SHARES_TOL = 1e-5
 BOUNDARY = 1e-6  # a trade whose average price is this close to its limit may legitimately flip
+FILL_TOL = 2 * 1e-6  # a sealed fill: the chain floors margin fills and bisects the imbalance in whole units
 
 
 @dataclass
@@ -51,6 +53,10 @@ class DiffReport:
     max_payout_diff: float = 0.0
     max_mm_pnl_diff: float = 0.0
     captured: tuple[list[Receipt], list[Receipt]] | None = None  # (FastEngine, chain) receipts of one block
+    # sealed batches only: per-fill difference, and the share tolerance derived from fills per account
+    max_fill_diff: float = 0.0
+    batch_shares_tol: float | None = None
+    fill_excess: float = 0.0  # largest (|Δfill| − its derived allowance); must be ≤ 0
 
     @property
     def mm_pnl_tol(self) -> float:
@@ -63,18 +69,22 @@ class DiffReport:
             not self.flag_mismatches
             and self.max_price_diff <= PRICE_TOL
             and self.max_cash_diff <= CASH_TOL
-            and self.max_shares_diff <= SHARES_TOL
+            and (self.batch_shares_tol is not None or self.max_shares_diff <= SHARES_TOL)
+            and self.fill_excess <= 0.0  # batches: every fill and every account within its derived allowance
             and self.max_payout_diff <= CASH_TOL
             and self.max_mm_pnl_diff <= self.mm_pnl_tol
         )
 
     def summary(self) -> str:
         verdict = "PASS" if self.passed else "FAIL"
+        shares_tol = self.batch_shares_tol or SHARES_TOL
+        fill = (f"max |Δfill| {self.max_fill_diff:.1e} (worst excess over derived allowance {self.fill_excess:.1e}), "
+                if self.batch_shares_tol else "")
         return (
             f"{self.name}: {verdict} | {self.blocks} blocks, {self.trades} trades | "
             f"max |Δprice| {self.max_price_diff:.2e} (tol {PRICE_TOL:.0e}), "
             f"max |Δcash| {self.max_cash_diff:.2e} (tol {CASH_TOL:.0e}), "
-            f"max |Δshares| {self.max_shares_diff:.2e} (tol {SHARES_TOL:.0e}), "
+            f"max |Δshares| {self.max_shares_diff:.2e} (tol {shares_tol:.1e}), {fill}"
             f"payouts {self.max_payout_diff:.2e}, MM PnL {self.max_mm_pnl_diff:.2e} (tol {self.mm_pnl_tol:.1e}) | "
             f"flag mismatches {len(self.flag_mismatches)}, boundary cases {len(self.boundary_cases)}"
         )
@@ -221,6 +231,16 @@ def run_scenarios(out: Path | None = None) -> list[DiffReport]:
         cash, blocks, y = traced_market(cfg, seed, market)
         reports.append(compare(name, {Venue.MAIN: cfg.market.b_main, Venue.REF: cfg.market.b_ref},
                                cash, blocks, y, cfg.mempool.base_fee))
+    cash, batches = fuzz_batches(30, seed=1)
+    reports.append(compare_batches("sealed batches: fuzz (30 batches, crowds, unrevealed)", 100.0, cash, batches, 1, 5,
+                                   [5.0, 25.0, 125.0, 625.0]))
+    zk = load_config(configs / "base.yaml")
+    for key, value in [("mempool.policy", "zk_batch"), ("agents.predators.count", 1),
+                       ("agents.attackers.non_reveal", 1), ("agents.attackers.free_option", 1)]:
+        zk = replace_in(zk, key, value)
+    cash, log, y = traced_batches(zk, 3, 15)
+    reports.append(compare_batches("sealed batches: zk_batch market, metadata predator + attackers (seed 3, market 16)",
+                                   zk.market.b_main, cash, log, y, zk.mempool.batch_interval, list(zk.mempool.escrow_tiers)))
     if out is not None:
         out.mkdir(parents=True, exist_ok=True)
         lines = []
@@ -230,3 +250,110 @@ def run_scenarios(out: Path | None = None) -> list[DiffReport]:
             lines += [f"    MISMATCH: {m}" for m in r.flag_mismatches]
         (out / "report.txt").write_text("\n".join(lines) + "\n")
     return reports
+
+
+# --------------------------------------------------------------------------- #
+# Sealed batches (Phase 3a): FastEngine.clear_batch vs SealedBatchAuction
+# --------------------------------------------------------------------------- #
+
+
+def quantize_sealed(o: SealedOrder) -> SealedOrder:
+    """The order as the chain represents it: size in 6-decimal units, limit in millionths."""
+    limit = min(1.0 - UNIT, max(UNIT, round(o.limit / UNIT) * UNIT))
+    return replace(o, size=round(o.size / UNIT) * UNIT, limit=limit)
+
+
+def compare_batches(name: str, b_main: float, initial_cash: Mapping[str, float],
+                    batches: Sequence[tuple[Sequence[tuple[SealedOrder, float]], Sequence[tuple[str, float]]]],
+                    y: int, batch_interval: int, tiers: Sequence[float]) -> DiffReport:
+    """Replay the same sealed batches (main market) on both engines; compare after every clearing.
+
+    A fill that is positive on one engine and zero on the other counts as a boundary case
+    when the positive fill is below one chain unit: pro-rata rounding on the margin
+    (the chain floors fills to whole units). Every other disagreement is a mismatch.
+    """
+    report = DiffReport(name)
+    report.fill_excess = -math.inf
+    liquidity = {Venue.MAIN: b_main}
+    allowance_by_account: dict[str, float] = {}  # Σ of the allowances of that account's fills
+    fast = FastEngine(liquidity, initial_cash)
+    with EvmEngine(liquidity, initial_cash) as evm:
+        evm.enable_batches(batch_interval, tiers)
+        for i, (revealed, unrevealed) in enumerate(batches):
+            orders = []
+            for order, escrow in revealed:
+                o = quantize_sealed(order)
+                ok_fast, ok_evm = fast.commit(o.agent_id, escrow), evm.commit(o.agent_id, escrow, o)
+                if ok_fast != ok_evm:
+                    report.flag_mismatches.append(f"batch {i}: commit of {o.agent_id} fast {ok_fast} evm {ok_evm}")
+                if ok_fast and ok_evm:
+                    orders.append((o, escrow))
+            hidden = [(a, e) for a, e in unrevealed if fast.commit(a, e) and evm.commit(a, e, None)]
+            # Allowance for this batch's fills: 2 chain units, plus the pre-batch state price difference
+            # magnified by the inverse slope of the average-price curve (margin fills invert it).
+            p0, dp0 = fast.prices()[Venue.MAIN], abs(fast.prices()[Venue.MAIN] - evm.prices()[Venue.MAIN])
+            allowance = FILL_TOL + 2 * dp0 * 2 * b_main / max(p0 * (1 - p0), 1e-6)
+            fr, er = fast.clear_batch(orders, hidden), evm.clear_batch(orders, hidden)
+            report.blocks += 1
+            report.trades += len(fr)
+            for a, b in zip(fr, er):
+                if (a.trade.shares > 1e-9) != (b.trade.shares > 0):
+                    tiny = max(a.trade.shares, b.trade.shares) < 2 * UNIT
+                    where = f"batch {i}: {a.trade.agent_id} {a.trade.side.value} fill fast {a.trade.shares:.7f} evm {b.trade.shares:.7f}"
+                    (report.boundary_cases if tiny else report.flag_mismatches).append(where)
+                report.max_fill_diff = max(report.max_fill_diff, abs(a.trade.shares - b.trade.shares))
+                report.fill_excess = max(report.fill_excess, abs(a.trade.shares - b.trade.shares) - allowance)
+                report.max_cash_diff = max(report.max_cash_diff, abs(a.cost - b.cost))
+                if a.trade.shares > 0 or b.trade.shares > 0:
+                    acct = a.trade.agent_id
+                    allowance_by_account[acct] = allowance_by_account.get(acct, 0.0) + allowance
+            report.max_price_diff = max(report.max_price_diff, abs(fast.prices()[Venue.MAIN] - evm.prices()[Venue.MAIN]))
+            cash, _ = _balance_diffs(fast.balances(), evm.balances())
+            report.max_cash_diff = max(report.max_cash_diff, cash)
+            # shares per account against that account's accumulated allowance (D-043 amendment 4)
+            fb, eb = fast.balances(), evm.balances()
+            for acct, allowed in allowance_by_account.items():
+                for side in Side:
+                    diff = abs(fb[acct].position(Venue.MAIN, side) - eb[acct].position(Venue.MAIN, side))
+                    report.max_shares_diff = max(report.max_shares_diff, diff)
+                    report.fill_excess = max(report.fill_excess, diff - (allowed + SHARES_TOL))
+        fast.resolve(y)
+        evm.resolve(y)
+        report.max_payout_diff, _ = _balance_diffs(fast.balances(), evm.balances())
+        report.max_mm_pnl_diff = abs(fast.market_maker_pnl()[Venue.MAIN] - evm.market_maker_pnl()[Venue.MAIN])
+    report.batch_shares_tol = max(allowance_by_account.values(), default=0.0) + SHARES_TOL  # largest per-account allowance
+    return report
+
+
+def fuzz_batches(n_batches: int, seed: int) -> tuple[dict[str, float], list]:
+    """Random sealed batches: both sides, tight and loose limits, identical-limit crowds, unrevealed commitments."""
+    rng = np.random.default_rng(seed)
+    agents = [f"t{i}" for i in range(8)]
+    batches = []
+    next_id = 0
+    for _ in range(n_batches):
+        revealed, unrevealed = [], []
+        shared_limit = float(rng.uniform(0.3, 0.8))
+        for agent in agents:
+            if rng.random() < 0.15:
+                unrevealed.append((agent, 5.0))
+                continue
+            if rng.random() < 0.3:
+                continue
+            side = Side.YES if rng.random() < 0.5 else Side.NO
+            limit = shared_limit if rng.random() < 0.4 else float(rng.uniform(0.05, 0.95))
+            size = float(rng.exponential(15.0)) + 0.5
+            tier = next(t for t in (5.0, 25.0, 125.0, 625.0) if t >= size * limit or t == 625.0)
+            size = min(size, tier / limit)
+            revealed.append((SealedOrder(next_id, agent, side, size, limit), tier))
+            next_id += 1
+        batches.append((revealed, unrevealed))
+    return {a: 5_000.0 for a in agents}, batches
+
+
+def traced_batches(cfg: SimConfig, seed: int, market: int) -> tuple[dict[str, float], list, int]:
+    """The sealed batches cleared in one simulated zk_batch market (main market only)."""
+    log: list = []
+    season = run_season(replace_in(cfg, "season.n_markets", market + 1), seed, trace_market=market, batch_log=log)
+    record = season.markets[market]
+    return record.bankrolls, log, record.y

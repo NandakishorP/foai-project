@@ -226,6 +226,7 @@ def run_market(
     researchers: frozenset[int],
     predator_memories: Sequence[PredatorMemory] = (),
     trace: list[BlockTrace] | None = None,
+    batch_log: list | None = None,
 ) -> MarketRecord:
     tape = generate_tape(cfg, rngs, market)
     agents = build_agents(cfg, rngs, market, traits, researchers, predator_memories)
@@ -259,6 +260,7 @@ def run_market(
             free_option_groups={a.agent_id: a.group for a in agents if isinstance(a, FreeOptionTrader)},
             spammers=frozenset(a.agent_id for a in agents if isinstance(a, SpamCommitter)),
         )
+        desk.log = batch_log  # None unless a replay asked for the clearings
 
     for tick in range(ticks):
         # 0. Sealed batches: reveal and clear the batch whose window just closed (D-046).
@@ -428,7 +430,7 @@ class SeasonRecord:
 
 
 def run_season(cfg: SimConfig, seed: int, trace_market: int | None = None,
-               trace: list[BlockTrace] | None = None) -> SeasonRecord:
+               trace: list[BlockTrace] | None = None, batch_log: list | None = None) -> SeasonRecord:
     """Run a season. If `trace_market` is given, every block of that market is appended to `trace` (replays)."""
     rngs = RngFactory(seed)
     traits = draw_forecaster_traits(cfg, rngs)
@@ -438,7 +440,8 @@ def run_season(cfg: SimConfig, seed: int, trace_market: int | None = None,
     for market in range(cfg.season.n_markets):
         researchers = decide_research(cfg, traits, memory, rngs, market)
         market_trace = trace if market == trace_market else None
-        record = run_market(cfg, rngs, market, traits, researchers, predator_memories, market_trace)
+        market_batches = batch_log if market == trace_market else None
+        record = run_market(cfg, rngs, market, traits, researchers, predator_memories, market_trace, market_batches)
         for index, gross in record.forecaster_pnl().items():
             memory.update(index, gross)
         season.markets.append(record)

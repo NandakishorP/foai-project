@@ -45,13 +45,30 @@ def build_contracts() -> None:
     subprocess.run([str(foundry_tool("forge")), "build", "--quiet"], cwd=CONTRACTS, check=True)
 
 
-def load_artifact(name: str) -> tuple[list[Any], str]:
-    """ABI and creation bytecode of contract `name` from contracts/out."""
-    path = CONTRACTS / "out" / f"{name}.sol" / f"{name}.json"
+def load_artifact(name: str, source: str | None = None) -> tuple[list[Any], str]:
+    """ABI and creation bytecode of contract `name` (declared in `source`.sol, default `name`.sol) from contracts/out."""
+    data = _artifact(name, source)
+    return data["abi"], data["bytecode"]["object"]
+
+
+def link_references(name: str, source: str | None = None) -> list[tuple[str, str]]:
+    """(source file, library name) pairs that must be deployed and linked into this contract's bytecode."""
+    refs = _artifact(name, source)["bytecode"].get("linkReferences", {})
+    return [(file, lib) for file, libs in refs.items() for lib in libs]
+
+
+def link_placeholder(file: str, lib: str) -> str:
+    """Solidity's placeholder for an unlinked library: __$ + first 34 hex chars of keccak256("file:lib") + $__."""
+    from web3 import Web3
+
+    return "__$" + Web3.keccak(text=f"{file}:{lib}").hex().removeprefix("0x")[:34] + "$__"
+
+
+def _artifact(name: str, source: str | None) -> dict[str, Any]:
+    path = CONTRACTS / "out" / f"{source or name}.sol" / f"{name}.json"
     if not path.exists():
         build_contracts()
-    data = json.loads(path.read_text())
-    return data["abi"], data["bytecode"]["object"]
+    return json.loads(path.read_text())
 
 
 def _free_port() -> int:

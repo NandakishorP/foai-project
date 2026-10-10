@@ -25,12 +25,15 @@ from web3 import Web3
 from web3.logs import DISCARD
 
 from tfs.core.types import Account, Bundle, Receipt, Side, Trade, Tx, Venue
-from tfs.engines.anvil import AnvilProcess, load_artifact
+from pathlib import Path
+
+from tfs.engines.anvil import AnvilProcess, link_placeholder, link_references, load_artifact
 from tfs.engines.base import Engine, EngineState, VenueState
+from tfs.market.batch import SealedOrder
 
 USDC = 10**6
 WAD = 10**18
-GAS_PER_TX = 3_000_000
+GAS_PER_TX = 30_000_000  # gas is free on our Anvil; large batch clearings and the registry need room
 ORACLE_BOND = 1 * USDC
 ORACLE_WINDOW = 60  # seconds of chain time
 
@@ -52,11 +55,12 @@ def sell_units(amount: float) -> int:
 
 class EvmEngine(Engine):
     def __init__(self, liquidity: Mapping[Venue, float], initial_cash: Mapping[str, float], base_fee: float = 0.0) -> None:
-        self.anvil = AnvilProcess(accounts=len(initial_cash) + 3).start()
+        self.anvil = AnvilProcess(accounts=len(initial_cash) + 4).start()
         self.w3 = Web3(Web3.HTTPProvider(self.anvil.url, request_kwargs={"timeout": 60}))
         accounts = self.w3.eth.accounts
-        self.deployer, self.builder, self.proposer = accounts[0], accounts[1], accounts[2]
-        self.address = {agent: accounts[3 + i] for i, agent in enumerate(initial_cash)}
+        self.deployer, self.builder, self.proposer, self.slash_sink = accounts[0], accounts[1], accounts[2], accounts[3]
+        self.address = {agent: accounts[4 + i] for i, agent in enumerate(initial_cash)}
+        self.auction: Any = None  # deployed by enable_batches()
         self._nonce: dict[str, int] = {}
         self._liquidity = dict(liquidity)
         self._block = 0
@@ -72,9 +76,12 @@ class EvmEngine(Engine):
 
     # ------------------------------------------------------------------ setup
 
-    def _contract(self, name: str, address: str | None = None) -> Any:
-        abi, bytecode = load_artifact(name)
+    def _contract(self, name: str, address: str | None = None, source: str | None = None) -> Any:
+        abi, bytecode = load_artifact(name, source)
         if address is None:
+            for file, lib in link_references(name, source):  # deploy and link external libraries first
+                lib_address = self._deploy_one(lib, source=Path(file).stem).address
+                bytecode = bytecode.replace(link_placeholder(file, lib), lib_address.removeprefix("0x").lower())
             return self.w3.eth.contract(abi=abi, bytecode=bytecode)
         return self.w3.eth.contract(address=address, abi=abi)
 
@@ -92,11 +99,11 @@ class EvmEngine(Engine):
         self._mine()
         return [self.w3.eth.get_transaction_receipt(h) for h in hashes]
 
-    def _deploy_one(self, name: str, *args: Any) -> Any:
-        [receipt] = self._mined([self._send(self._contract(name).constructor(*args), self.deployer)])
+    def _deploy_one(self, name: str, *args: Any, source: str | None = None) -> Any:
+        [receipt] = self._mined([self._send(self._contract(name, source=source).constructor(*args), self.deployer)])
         if receipt.status != 1:
             raise RuntimeError(f"deploying {name} failed")
-        return self._contract(name, receipt.contractAddress)
+        return self._contract(name, receipt.contractAddress, source=source)
 
     def _deploy(self, liquidity: Mapping[Venue, float], base_fee: float) -> None:
         self.usdc = self._deploy_one("MockUSDC")
@@ -188,6 +195,7 @@ class EvmEngine(Engine):
                         acct.shares[(venue, side)] = qty / USDC
             out[agent] = acct
         out["builder"] = Account(cash=self.builder_revenue())
+        out["slashed"] = Account(cash=self.usdc.functions.balanceOf(self.slash_sink).call() / USDC)
         return out
 
     def resolve(self, y: int) -> None:
@@ -208,6 +216,100 @@ class EvmEngine(Engine):
                    for addr in self.address.values() for i in self.market_id.values()]
         self._check(self._mined(redeems), "redemption")
         self._resolved = y
+
+    # ---------------------------------------------------------- sealed batches
+
+    def enable_batches(self, batch_interval: int, tiers: Sequence[float], verifier_kind: str = "mock") -> None:
+        """Deploy the identity registry, a verifier and the SealedBatchAuction for the main market.
+
+        verifier_kind:
+        - "mock": ZK_BATCH semantics with the MockVerifier (proofs accepted without generating one per
+          order; for checking clearing maths over many orders);
+        - "real": the bb-generated UltraHonk verifier (real proofs; integration tests);
+        - "none": COMMIT_REVEAL (no proofs; public one-per-address nullifier).
+        """
+        self.registry = self._deploy_one("IdentityRegistry", self.usdc.address, 0)
+        if verifier_kind == "mock":
+            verifier = self._deploy_one("MockVerifier").address
+        elif verifier_kind == "real":
+            verifier = self._deploy_one("HonkVerifier", source="SealedOrderVerifier").address
+        else:
+            verifier = "0x" + "00" * 20
+        self.auction = self._deploy_one(
+            "SealedBatchAuction", self.usdc.address, self.shares.address, self.markets[Venue.MAIN].address,
+            self.router.address, verifier, self.registry.address, batch_interval, [to_units(t) for t in tiers],
+            self.slash_sink,
+        )
+        self.batch_interval = batch_interval
+        self._commits: list[tuple[SealedOrder | None, int, bytes]] = []  # (order or None if never revealed, escrow, tx)
+        self._sent_commitments = 0  # never reset: nullifiers and dummy commitments must stay unique across batches
+        hashes = [self._send(self.usdc.functions.approve(self.auction.address, 2**256 - 1), a) for a in self.address.values()]
+        self._check(self._mined(hashes), "auction approvals")
+
+    def commit(self, agent_id: str, escrow: float, order: SealedOrder | None = None) -> bool:
+        """Send a sealed commitment (mined with the batch). `order=None`: a commitment that will never be revealed."""
+        addr = self.address[agent_id]
+        units = to_units(escrow)
+        if self.usdc.functions.balanceOf(addr).call() < units:
+            return False
+        self._sent_commitments += 1
+        if order is None:
+            commitment = 10**30 + self._sent_commitments  # arbitrary: it is never opened
+        else:
+            commitment = self.auction.functions.commitmentOf(*self._opening(order)).call()
+        nullifier = 10**12 + self._sent_commitments  # unique (the mock verifier does not check it)
+        tx = self._send(self.auction.functions.commit(commitment, units, nullifier, b""), addr)
+        self._commits.append((order, units, tx))
+        return True
+
+    def _opening(self, order: SealedOrder) -> tuple[int, int, int, int, int]:
+        """(side, limit in millionths, size in units, salt, secret): deterministic per order and agent."""
+        side = SIDE_INDEX[order.side]
+        secret = 10_000 + list(self.address).index(order.agent_id)
+        return side, round(order.limit * 1_000_000), round(order.size * USDC), order.order_id + 1, secret
+
+    def clear_batch(self, revealed: Sequence[tuple[SealedOrder, float]],
+                    unrevealed: Sequence[tuple[str, float]], venue: Venue = Venue.MAIN) -> list[Receipt]:
+        """Mine the commitments, wait for the window to close, reveal and clear in one block, then merge pairs."""
+        commits = self._mined([tx for _, _, tx in self._commits])
+        self._check(commits, "commitments")
+        events = [self.auction.events.Committed().process_receipt(r, errors=DISCARD)[0]["args"] for r in commits]
+        batch_id = events[0]["batchId"] if events else self.auction.functions.currentBatch().call()
+        index_of = {id(order): ev["index"] for (order, _, _), ev in zip(self._commits, events) if order is not None}
+        self._commits = []
+        end = self.auction.functions.windowEnd(batch_id).call()
+        while self.w3.eth.block_number + 1 < end:
+            self._mine()
+        before = self._price(venue)
+        txs = [self._send(self.auction.functions.reveal(batch_id, index_of[id(o)], *self._opening(o)), self.address[o.agent_id])
+               for o, _ in revealed]
+        txs.append(self._send(self.auction.functions.clear(batch_id), self.deployer))
+        mined = self._mined(txs)
+        self._check(mined, "reveal and clear")
+        after = self._price(venue)
+        self._last_price[venue] = after
+        filled = {ev["args"]["index"]: ev["args"] for ev in self.auction.events.Filled().process_receipt(mined[-1], errors=DISCARD)}
+        receipts = []
+        for order, _ in revealed:
+            ev = filled.get(index_of[id(order)])
+            qty = (ev["filled"] if ev else 0) / USDC
+            paid = (ev["paid"] if ev else 0) / USDC
+            trade = Trade(order.agent_id, venue, order.side, qty, order.limit)
+            receipts.append(Receipt(trade, qty > 0, "" if qty > 0 else "not filled at the uniform price",
+                                    paid, before, after, requested=order.size))
+        self._merge_pairs(venue)
+        self._block += 1
+        return receipts
+
+    def _merge_pairs(self, venue: Venue) -> None:
+        hashes = []
+        for agent, addr in self.address.items():
+            yes = self.shares.functions.balanceOf(addr, self._token(venue, Side.YES)).call()
+            no = self.shares.functions.balanceOf(addr, self._token(venue, Side.NO)).call()
+            if min(yes, no) > 0:
+                hashes.append(self._send(self.shares.functions.merge(self.market_id[venue], min(yes, no)), addr))
+        if hashes:
+            self._check(self._mined(hashes), "merging pairs")
 
     # ---------------------------------------------------------- extra queries
 

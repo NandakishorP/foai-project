@@ -93,6 +93,8 @@ class BatchDesk:
         self.metadata: list[CommitMeta] = []  # commitments of the batch currently open
         self.stats = DeskStats()
         self._next_id = 0
+        # optional record of every clearing (for replaying batches on another engine)
+        self.log: list[tuple[list[tuple[SealedOrder, float]], list[tuple[str, float]]]] | None = None
 
     def batch_of(self, tick: int) -> int:
         return tick // self.K
@@ -205,6 +207,8 @@ class BatchDesk:
         unrevealed = [(e.order.agent_id, e.escrow) for e in entries if not e.reveal]
         self.stats.unrevealed += len(unrevealed)
         self.stats.batches += 1
+        if self.log is not None:
+            self.log.append((list(revealed), list(unrevealed)))
         receipts = self.engine.clear_batch(revealed, unrevealed)  # one receipt per revealed order, same order
         for e, r in zip([e for e in entries if e.reveal], receipts):
             filled = r.trade.shares
