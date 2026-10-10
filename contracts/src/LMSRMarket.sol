@@ -47,7 +47,7 @@ contract LMSRMarket is ERC1155Holder {
     SD59x18 public qYes; // shares held by traders (18 decimals)
     SD59x18 public qNo;
 
-    event Traded(address indexed trader, uint8 side, int256 amount, int256 cash);
+    event Traded(address indexed trader, uint8 side, int256 amount, int256 cash, uint256 priceYesAfter);
 
     error OnlyRouter();
     error LimitExceeded(uint256 cash, uint256 limit);
@@ -104,7 +104,7 @@ contract LMSRMarket is ERC1155Holder {
         _move(side, int256(amount));
         _deliver(trader, side, amount);
         _mergeSurplus();
-        emit Traded(trader, side, int256(amount), int256(paid));
+        emit Traded(trader, side, int256(amount), int256(paid), priceYes());
     }
 
     /// @notice Buy back `amount` shares of `side` from `trader` for at least `minProceeds` USDC.
@@ -120,7 +120,7 @@ contract LMSRMarket is ERC1155Holder {
         _move(side, -int256(amount));
         _mergeSurplus(); // first turn returned pairs back into USDC: the proceeds may need it
         usdc.safeTransfer(trader, received);
-        emit Traded(trader, side, -int256(amount), -int256(received));
+        emit Traded(trader, side, -int256(amount), -int256(received), priceYes());
     }
 
     function _move(uint8 side, int256 amount) private {
