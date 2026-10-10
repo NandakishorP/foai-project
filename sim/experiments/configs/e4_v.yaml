@@ -1,0 +1,25 @@
+# E4-V (descriptive; PREREGISTRATION H4 "descriptive"): variations of the search rule.
+# - depth 1, 2, 4 (reference 3);
+# - predator latency 0.05 and 0.5 (reference 0.2);
+# - single deviator: only forecaster 0 searches, the other nine use the capped rule.
+# Same seeds and scoring as E4. The capped rule at other latencies is in E2a (same seeds and config).
+extends: base.yaml
+name: e4_v
+season:
+  n_markets: 30
+agents:
+  forecasters:
+    execution:
+      rule: expectiminimax
+analysis:
+  hypothesis: null
+  note: "descriptive variations of the expectiminimax rule"
+  score_from_market: 5
+  pair_on: agents.predators.count
+sweep:
+  crossed:
+    agents.predators.count: [0, 1]
+  one_at_a_time:
+    agents.forecasters.execution.depth: [1, 2, 4]
+    agents.predators.latency: [0.05, 0.5]
+    agents.forecasters.execution.users: [1]

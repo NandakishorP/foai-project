@@ -118,6 +118,30 @@ def cmd_h3(args: argparse.Namespace) -> None:
     print(f"wrote {args.out / 'e3' / 'h3_verdicts.json'}")
 
 
+def cmd_h4(args: argparse.Namespace) -> None:
+    from tfs.experiments.h4 import run
+
+    summary = run(args.out / "e4")
+    print(f"H4: {summary['H4']['verdict']}")
+    print(f"wrote {args.out / 'e4' / 'h4_verdict.json'}")
+
+
+def cmd_search_bench(args: argparse.Namespace) -> None:
+    """E4-search: nodes and time per decision, plain vs each pruning technique (descriptive)."""
+    from tfs.core.config import expand_sweep
+    from tfs.experiments.search_bench import benchmark, plot, sample_states, write
+
+    points = {p.label: p.config for p in expand_sweep(load_raw(Path("sim/experiments/configs/e4.yaml")))}
+    cfg = points["agents.forecasters.execution.rule=expectiminimax|agents.predators.count=1|baseline"]
+    states = sample_states(cfg, range(3), args.states)
+    rows = benchmark(cfg, states, plain_depth5_states=args.plain_depth5)
+    out = args.out / "e4_search"
+    print(f"{len(states)} states; wrote {write(rows, out)} and {plot(rows, out)}")
+    for r in rows:
+        print(f"{r.variant:22s} depth {r.depth}: {r.mean_nodes:10.1f} nodes, {r.mean_ms:8.2f} ms, "
+              f"max |value - plain| {r.max_value_error:.1e}  ({r.states} states)")
+
+
 def cmd_measure_env(args: argparse.Namespace) -> None:
     """Environment numbers for the order-splitting game, measured on baseline runs (D-053)."""
     from tfs.core.config import expand_sweep
@@ -166,6 +190,16 @@ def main() -> None:
     h3p = sub.add_parser("h3", help="pre-registered H3 verdicts from the E3-F, E3-K and E3-E runs")
     h3p.add_argument("--out", type=Path, default=Path("results"))
     h3p.set_defaults(func=cmd_h3)
+
+    h4p = sub.add_parser("h4", help="pre-registered H4 verdict from the E4 runs")
+    h4p.add_argument("--out", type=Path, default=Path("results"))
+    h4p.set_defaults(func=cmd_h4)
+
+    sb = sub.add_parser("search-bench", help="E4-search: pruning benchmark on sampled game states")
+    sb.add_argument("--states", type=int, default=500)
+    sb.add_argument("--plain-depth5", type=int, default=50, help="states for plain expectiminimax at depth 5")
+    sb.add_argument("--out", type=Path, default=Path("results"))
+    sb.set_defaults(func=cmd_search_bench)
 
     me = sub.add_parser("measure-env", help="environment numbers for the order-splitting game (D-053)")
     me.add_argument("--seeds", type=int, default=50)

@@ -445,13 +445,18 @@ def season_policy(cfg: SimConfig) -> SplittingPolicy | None:
 
 
 def run_season(cfg: SimConfig, seed: int, trace_market: int | None = None,
-               trace: list[BlockTrace] | None = None, batch_log: list | None = None) -> SeasonRecord:
-    """Run a season. If `trace_market` is given, every block of that market is appended to `trace` (replays)."""
+               trace: list[BlockTrace] | None = None, batch_log: list | None = None,
+               splitting: SplittingPolicy | None = None) -> SeasonRecord:
+    """Run a season. If `trace_market` is given, every block of that market is appended to `trace` (replays).
+
+    `splitting` lets a caller pass the season's order-splitting policy and inspect it afterwards
+    (the search benchmark does); by default it is created from the config.
+    """
     rngs = RngFactory(seed)
     traits = draw_forecaster_traits(cfg, rngs)
     memory = ResearchMemory(ema=[None] * len(traits), alpha=cfg.agents.forecasters.research.ema_alpha)
     predator_memories = [PredatorMemory() for _ in range(cfg.agents.predators.count)]  # persist across markets
-    splitting = season_policy(cfg)
+    splitting = splitting if splitting is not None else season_policy(cfg)
     season = SeasonRecord(seed=seed, traits=traits)
     for market in range(cfg.season.n_markets):
         researchers = decide_research(cfg, traits, memory, rngs, market)

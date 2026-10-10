@@ -98,3 +98,16 @@ def test_the_predator_only_front_runs_when_it_expects_a_profit() -> None:
                 assert ev * (1 - PARAMS.bid_share) >= PARAMS.predator_min_profit
                 assert cost_at_price(sigmoid(at_min.price + f / PARAMS.b), PARAMS.b, Side.YES, q) <= q * sigmoid(
                     at_min.belief) + 1e-9  # the slice still fills after the front-run
+
+
+@pytest.mark.slow  # plain expectiminimax at depth 5: about a minute
+def test_search_benchmark_rows_agree_with_plain_search() -> None:
+    from tfs.experiments.search_bench import benchmark
+
+    game = OrderSplittingGame(PARAMS)
+    states = [game.root(0.9, 0.2, 60.0), game.root(-0.4, 0.3, 25.0), game.root(1.5, 1.0, 90.0)]
+    rows = benchmark(BASE, states, plain_depth5_states=1)
+    assert all(r.max_value_error < 1e-9 for r in rows)
+    plain = {r.depth: r.mean_nodes for r in rows if r.variant == "plain" and r.depth < 5}
+    full = {r.depth: r.mean_nodes for r in rows if r.variant == "+ transposition table"}
+    assert all(full[d] <= plain[d] for d in plain)

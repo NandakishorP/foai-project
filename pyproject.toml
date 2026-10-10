@@ -33,5 +33,5 @@ testpaths = ["tests"]
 addopts = "-ra -m 'not slow'"
 markers = [
     "evm: needs the project-local Anvil (.tools/foundry) and web3; skipped when unavailable",
-    "slow: long differential-test scenarios; run with `make difftest` or `pytest -m slow`",
+    "slow: long tests (differential scenarios, depth-5 plain search); run with `make difftest` or `pytest -m slow`",
 ]

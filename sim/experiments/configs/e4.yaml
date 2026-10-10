@@ -1,0 +1,17 @@
+# E4 (PREREGISTRATION H4; DECISIONS D-053, D-054): does smart execution help informed traders?
+# Research FORCED ON, 30-market seasons scored on markets 6-30 (as E2a/H1), PUBLIC mempool.
+# Every forecaster uses the slice rule under test; each rule runs with 0 and 1 reference predator.
+# Verdict: `python -m tfs h4` (joint paired bootstrap across cells).
+extends: base.yaml
+name: e4
+season:
+  n_markets: 30
+analysis:
+  hypothesis: null
+  note: "per-rule paired statistics; the H4 verdict comes from `python -m tfs h4`"
+  score_from_market: 5
+  pair_on: agents.predators.count
+sweep:
+  crossed:
+    agents.forecasters.execution.rule: [capped, naive, twap, random, expectiminimax]
+    agents.predators.count: [0, 1]
