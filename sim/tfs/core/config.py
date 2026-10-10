@@ -105,6 +105,7 @@ class ExecutionConfig:
     logit_step: float  # search grid for price and belief
     size_ratio: float  # geometric search grid for the remaining shares
     twap_slices: int  # TWAP sends 1/twap_slices of the shortfall per block
+    users: int | None  # forecasters (lowest indices) using `rule`; the others use capped. None = all
 
 
 @dataclass(frozen=True)

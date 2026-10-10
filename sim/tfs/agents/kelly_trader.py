@@ -6,6 +6,7 @@ from tfs.agents.base import Agent, Observation
 from tfs.agents.beliefs import Belief, clipped_logit
 from tfs.agents.execution import exposure_trade
 from tfs.agents.kelly import kelly_target_net_yes
+from tfs.agents.slicing import Capped, SliceInput, SliceRule
 from tfs.core.types import Account, Trade, Tx, Venue
 
 
@@ -17,6 +18,8 @@ class KellyTrader(Agent):
     - trade only in the direction belief − price points;
     - stop at the Kelly target exposure;
     - never push the price past the belief (size is capped by the LMSR closed form);
+    - how much of the remaining shortfall to send this block is the slice rule's choice
+      (tfs.agents.slicing; default `Capped(max_order)`, the Phase 1–3a rule);
     - set the limit price at the belief, so being front-run can at worst cancel the order.
 
     Subclasses decide which signals feed the belief (`absorb`).
@@ -34,6 +37,7 @@ class KellyTrader(Agent):
         min_order: float,
         public_latency: int | None,
         private_source: int | None = None,
+        slice_rule: SliceRule | None = None,
     ) -> None:
         super().__init__(agent_id, bankroll, public_latency, private_source)
         self.venue = venue
@@ -42,8 +46,10 @@ class KellyTrader(Agent):
         self.kelly_fraction = kelly_fraction
         self.max_order = max_order
         self.min_order = min_order
+        self.slice_rule = slice_rule if slice_rule is not None else Capped(max_order)
         self._price = 0.5
         self._account = Account(cash=bankroll)
+        self._last_belief: float | None = None  # to tell the slice rule when new information arrived
 
     def absorb(self, obs: Observation) -> None:
         """Feed this tick's evidence into the belief. Overridden by subclasses."""
@@ -64,6 +70,8 @@ class KellyTrader(Agent):
     def next_trade(self) -> Trade | None:
         price = self._price
         belief = self.belief.probability(price)
+        fresh = belief != self._last_belief
+        self._last_belief = belief
         if belief == price:
             return None
         direction = 1 if belief > price else -1
@@ -73,7 +81,7 @@ class KellyTrader(Agent):
         if shortfall <= 0:
             return None  # already at (or beyond) the Kelly target in the edge direction
         push_cap = abs(self.liquidity * (clipped_logit(belief) - clipped_logit(price)))
-        size = min(shortfall, self.max_order, push_cap)
+        size = self.slice_rule.size(SliceInput(belief, price, shortfall, push_cap, fresh))
         if size < self.min_order:
             return None
 

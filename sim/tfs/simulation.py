@@ -26,6 +26,7 @@ from tfs.agents.metadata_predator import MetadataPredator
 from tfs.agents.noise import NoiseTrader
 from tfs.agents.predator import Predator, PredatorMemory
 from tfs.agents.public_news import PublicNewsTrader
+from tfs.agents.slicing import make_slice_rule
 from tfs.agents.trend import TrendFollower
 from tfs.core.config import SimConfig
 from tfs.core.information import (
@@ -42,6 +43,7 @@ from tfs.engines.fast import SLASHED_ID, FastEngine
 from tfs.mempool.batch_desk import BatchDesk
 from tfs.mempool.builder import BlockPlan, FeeBuilder, FrontRunRequest
 from tfs.mempool.mempool import Mempool, MempoolPolicy, PendingTx
+from tfs.search.order_splitting import OrderSplittingGame, SplittingPolicy, split_params
 
 
 # --------------------------------------------------------------------------- #
@@ -56,10 +58,12 @@ def build_agents(
     traits: Sequence[ForecasterTraits],
     researchers: frozenset[int],
     predator_memories: Sequence[PredatorMemory] = (),
+    splitting: SplittingPolicy | None = None,
 ) -> list[Agent]:
     """Create every agent trading in this market. Non-researching forecasters do not take part (D-014).
 
-    Predators get the memory they carry across the season (D-033 amendment 4).
+    Predators get the memory they carry across the season (D-033 amendment 4). Forecasters
+    using the expectiminimax slice rule share the season's `splitting` policy (solved game states).
     """
     a = cfg.agents
     b = {Venue.MAIN: cfg.market.b_main, Venue.REF: cfg.market.b_ref}
@@ -79,6 +83,8 @@ def build_agents(
                     max_order=fc.max_order,
                     min_order=fc.min_order,
                     public_latency=fc.public_latency,
+                    slice_rule=make_slice_rule(fc.execution, fc.max_order, t.index,
+                                               rngs.stream("slice_random", market, t.index), splitting),
                 )
             )
 
@@ -227,9 +233,10 @@ def run_market(
     predator_memories: Sequence[PredatorMemory] = (),
     trace: list[BlockTrace] | None = None,
     batch_log: list | None = None,
+    splitting: SplittingPolicy | None = None,
 ) -> MarketRecord:
     tape = generate_tape(cfg, rngs, market)
-    agents = build_agents(cfg, rngs, market, traits, researchers, predator_memories)
+    agents = build_agents(cfg, rngs, market, traits, researchers, predator_memories, splitting)
     traders = [a for a in agents if not isinstance(a, Predator)]
     predators = [a for a in agents if isinstance(a, Predator)]
     engine = FastEngine(
@@ -429,6 +436,14 @@ class SeasonRecord:
         return [len(m.researchers) / n if n else 0.0 for m in self.markets]
 
 
+def season_policy(cfg: SimConfig) -> SplittingPolicy | None:
+    """The order-splitting policy forecasters share for a season, if any of them searches (E4)."""
+    ex = cfg.agents.forecasters.execution
+    if ex.rule != "expectiminimax":
+        return None
+    return SplittingPolicy(OrderSplittingGame(split_params(cfg)), depth=ex.depth)
+
+
 def run_season(cfg: SimConfig, seed: int, trace_market: int | None = None,
                trace: list[BlockTrace] | None = None, batch_log: list | None = None) -> SeasonRecord:
     """Run a season. If `trace_market` is given, every block of that market is appended to `trace` (replays)."""
@@ -436,12 +451,14 @@ def run_season(cfg: SimConfig, seed: int, trace_market: int | None = None,
     traits = draw_forecaster_traits(cfg, rngs)
     memory = ResearchMemory(ema=[None] * len(traits), alpha=cfg.agents.forecasters.research.ema_alpha)
     predator_memories = [PredatorMemory() for _ in range(cfg.agents.predators.count)]  # persist across markets
+    splitting = season_policy(cfg)
     season = SeasonRecord(seed=seed, traits=traits)
     for market in range(cfg.season.n_markets):
         researchers = decide_research(cfg, traits, memory, rngs, market)
         market_trace = trace if market == trace_market else None
         market_batches = batch_log if market == trace_market else None
-        record = run_market(cfg, rngs, market, traits, researchers, predator_memories, market_trace, market_batches)
+        record = run_market(cfg, rngs, market, traits, researchers, predator_memories, market_trace, market_batches,
+                            splitting)
         for index, gross in record.forecaster_pnl().items():
             memory.update(index, gross)
         season.markets.append(record)

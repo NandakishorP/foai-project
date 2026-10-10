@@ -65,6 +65,7 @@ agents:
       logit_step: 0.01    # search grid for price and belief: a third of the per-block noise move (0.03)
       size_ratio: 1.189   # 2^(1/4): neighbouring points of the remaining-shares grid differ by 19%
       twap_slices: 5      # TWAP sends 1/5 of the shortfall each block
+      users: null         # null: every forecaster uses `rule` (H4 primary); 1 = the single-deviator variant
     research:
       mode: always        # E1 fixes participation; season experiments use "endogenous"
       cost_median: null   # set by the cost-calibration rule (DECISIONS D-017) for endogenous runs

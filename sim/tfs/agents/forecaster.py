@@ -5,6 +5,7 @@ from __future__ import annotations
 from tfs.agents.base import Observation
 from tfs.agents.beliefs import Belief, PriceAnchoredBelief
 from tfs.agents.kelly_trader import KellyTrader
+from tfs.agents.slicing import SliceRule
 from tfs.core.types import Venue
 
 
@@ -16,7 +17,10 @@ class InformedForecaster(KellyTrader):
       season, the research decision (`ResearchMemory`) maximises expected net profit.
     - Environment: the main LMSR market; a stochastic stream of public news
       and of its own private signals; other traders whose orders move the price.
-    - Actuators: buy or sell YES/NO shares on the main market (one order per tick).
+    - Actuators: buy or sell YES/NO shares on the main market (one order per tick). How
+      much of its Kelly shortfall it sends each tick is its slice rule (E4): by default a
+      fixed cap; with `expectiminimax`, the first move of the order-splitting game
+      against a predator (adversarial search, tfs.search).
     - Sensors: its own private signals (immediately), public news (after
       `public_latency` ticks), the main market price, and its own account and fills.
 
@@ -41,6 +45,7 @@ class InformedForecaster(KellyTrader):
         max_order: float,
         min_order: float,
         public_latency: int,
+        slice_rule: SliceRule | None = None,
     ) -> None:
         super().__init__(
             agent_id=f"forecaster_{index}",
@@ -53,6 +58,7 @@ class InformedForecaster(KellyTrader):
             min_order=min_order,
             public_latency=public_latency,
             private_source=index,
+            slice_rule=slice_rule,
         )
         self.index = index
         self.uses_public_news = not isinstance(belief, PriceAnchoredBelief)
