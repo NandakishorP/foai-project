@@ -1,0 +1,140 @@
+{
+  "rule": "docs/PREREGISTRATION.md, H4 (joint paired bootstrap over seeds, 10,000 resamples, seed 0)",
+  "H4": {
+    "verdict": "contradicted",
+    "R4": {
+      "point": 0.9014081891499975,
+      "lo": 0.8903371950495161,
+      "hi": 0.9119597508417884
+    },
+    "L_capped": {
+      "point": 0.12991220913862433,
+      "lo": 0.12259739156501995,
+      "hi": 0.13767619156457486
+    },
+    "L_naive": {
+      "point": 0.23435214702142448,
+      "lo": 0.22452360214779601,
+      "hi": 0.24502363738281588
+    },
+    "L_twap": {
+      "point": 0.08256356112623675,
+      "lo": 0.07721452405447239,
+      "hi": 0.08828775648463293
+    },
+    "L_random": {
+      "point": 0.18643996425326492,
+      "lo": 0.178939172980994,
+      "hi": 0.1945133669313721
+    },
+    "L_expectiminimax": {
+      "point": 0.1470739693780182,
+      "lo": 0.14011035536840502,
+      "hi": 0.1545048846683189
+    },
+    "delta_L": {
+      "point": 0.017161760239393864,
+      "lo": 0.010779409387833512,
+      "hi": 0.023568853405606095
+    }
+  },
+  "descriptive": {
+    "R4_zero_predators": {
+      "point": 0.9695855083967326,
+      "lo": 0.9633699450796646,
+      "hi": 0.975425357858518
+    },
+    "cells": {
+      "capped|pred=0": {
+        "pnl_forecaster": 1482.6907577097672,
+        "pnl_per_researcher": 5.930763030839069,
+        "pnl_predator": 0.0,
+        "truth_mse": 0.0012900939393014404,
+        "forecaster_revert_share": 0.5574292747161842,
+        "forecaster_unfilled_share": 0.5281965686899384,
+        "frontruns": 0.0
+      },
+      "capped|pred=1": {
+        "pnl_forecaster": 1290.0711259062705,
+        "pnl_per_researcher": 5.160284503625082,
+        "pnl_predator": 5.760362201676125,
+        "truth_mse": 0.00138015743238524,
+        "forecaster_revert_share": 0.613573637751906,
+        "forecaster_unfilled_share": 0.604924650283057,
+        "frontruns": 54.6276
+      },
+      "naive|pred=0": {
+        "pnl_forecaster": 1487.6155026779422,
+        "pnl_per_researcher": 5.950462010711768,
+        "pnl_predator": 0.0,
+        "truth_mse": 0.001148359377833218,
+        "forecaster_revert_share": 0.597221912983392,
+        "forecaster_unfilled_share": 0.6229731705639407,
+        "frontruns": 0.0
+      },
+      "naive|pred=1": {
+        "pnl_forecaster": 1138.989615683011,
+        "pnl_per_researcher": 4.555958462732043,
+        "pnl_predator": 10.057775582721597,
+        "truth_mse": 0.0013026816575126801,
+        "forecaster_revert_share": 0.6466286224005009,
+        "forecaster_unfilled_share": 0.6819012318020475,
+        "frontruns": 57.75059999999999
+      },
+      "twap|pred=0": {
+        "pnl_forecaster": 1532.0300898730102,
+        "pnl_per_researcher": 6.128120359492041,
+        "pnl_predator": 0.0,
+        "truth_mse": 0.0021372610247163805,
+        "forecaster_revert_share": 0.13647549431008962,
+        "forecaster_unfilled_share": 0.16538496082806683,
+        "frontruns": 0.0
+      },
+      "twap|pred=1": {
+        "pnl_forecaster": 1405.540229900546,
+        "pnl_per_researcher": 5.622160919602184,
+        "pnl_predator": 4.061674741078209,
+        "truth_mse": 0.002075828140170713,
+        "forecaster_revert_share": 0.20067494283835408,
+        "forecaster_unfilled_share": 0.2264956722690591,
+        "frontruns": 43.925
+      },
+      "random|pred=0": {
+        "pnl_forecaster": 1503.3523029335215,
+        "pnl_per_researcher": 6.013409211734086,
+        "pnl_predator": 0.0,
+        "truth_mse": 0.0014413158423194111,
+        "forecaster_revert_share": 0.2905207080141165,
+        "forecaster_unfilled_share": 0.3034363977385271,
+        "frontruns": 0.0
+      },
+      "random|pred=1": {
+        "pnl_forecaster": 1223.0673533145323,
+        "pnl_per_researcher": 4.89226941325813,
+        "pnl_predator": 7.687098196808736,
+        "truth_mse": 0.0015127232271835616,
+        "forecaster_revert_share": 0.379228394495624,
+        "forecaster_unfilled_share": 0.3994709441928762,
+        "frontruns": 59.8464
+      },
+      "expectiminimax|pred=0": {
+        "pnl_forecaster": 1485.4341735686144,
+        "pnl_per_researcher": 5.941736694274458,
+        "pnl_predator": 0.0,
+        "truth_mse": 0.0012346105992634793,
+        "forecaster_revert_share": 0.44396319171938153,
+        "forecaster_unfilled_share": 0.4399299616645297,
+        "frontruns": 0.0
+      },
+      "expectiminimax|pred=1": {
+        "pnl_forecaster": 1266.9654734121223,
+        "pnl_per_researcher": 5.067861893648489,
+        "pnl_predator": 7.217459856667169,
+        "truth_mse": 0.001315145390055776,
+        "forecaster_revert_share": 0.5006789356744714,
+        "forecaster_unfilled_share": 0.49888721907137146,
+        "frontruns": 48.790200000000006
+      }
+    }
+  }
+}

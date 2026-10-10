@@ -74,7 +74,25 @@ Verdict rules were committed before each experiment ran (git history is the evid
 - Exploratory X-4 tests a limit-respecting marginal-price clearing (planned; results will appear here, labelled exploratory).
 
 ## 6. Phase 3b — Smart execution (H4) and market stability under shocks
-*(to be written after the runs)*
+
+### 6.1 The search algorithm: correct and efficient
+- **The order-splitting game** (SPEC §6.1). Each block the forecaster (MAX) picks a slice, the predator (MIN) picks a front-run, and chance moves the price (noise, news, other traders).
+- **How it is solved:** depth-limited expectiminimax with alpha-beta at MAX/MIN nodes, Star1 pruning at chance nodes, move ordering and an exact transposition table on a state grid. A plain-language walkthrough with worked trees is in `docs/report/walkthroughs/search.md`.
+- **Correctness.** Every combination of the speed-ups returns exactly the plain expectiminimax value, on 620 random games and on the real game.
+- **Efficiency:** see the node-count benchmark in `docs/report/phase3b/e4_search/` *(numbers to be added)*.
+
+### 6.2 The strategy: H4 contradicted
+- **Result** (pre-registered, 200 paired seeds): the search rule earned 0.901 [0.890, 0.912] of the best simple rule, TWAP. It also lost *more* of its edge to the predator than the Phase 1–3a rule (+1.7 pp [+1.1, +2.4]).
+- **The search is correct for its game, but the game leaves out the main force.** It models one predator and a fixed competitor push. In the market, nine other researchers with the same signal send the same order at the same limit in the same block. TWAP's small slices avoid that crowd (researcher reverts 20% vs 61%), and beat the search even with no predator (0.970 [0.963, 0.975]).
+- **Minimax is only as good as its model of the game.** This risk was written into the pre-registration before the run.
+- **Private optimum, social cost.** TWAP is the best private response, but it slows price discovery: truth MSE is about 65% higher than under the capped rule without predators (0.00214 vs 0.00129). Each researcher who slows down keeps more rent and leaves the price further from the truth for longer: an externality between the individual and the market optimum.
+- **Exploratory X-5** (crowd-aware search) tests whether adding the crowd to the model closes the gap. *(to be added)*
+
+### 6.3 Market stability under shocks
+*(to be written after the 200-seed shock runs)*
+
+### 6.4 Synthesis
+See `docs/report/synthesis.md`: across F-002, H3b and H4, the main adversary of an informed agent is the other informed agents sharing its signal, not the predator.
 
 ## 7. Phase 4 — Real-world calibration, tournament, dashboard
 *(to be written)*

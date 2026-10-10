@@ -829,6 +829,59 @@ H3c contradicted on its "compounds beyond 3K" branch. ΔT is not monotone in K. 
 
 ---
 
+## D-055 — E4 results: H4 contradicted (as pre-registered)
+**Date:** 2026-10-10 · Code and configs committed before any E4 run (`42743ad`; tree clean in `meta.json`). Archive: `docs/report/phase3b/e4/` (`h4_verdict.json`), `e4_v/`, `deviator/`, `e4_search/`.
+
+**H4: CONTRADICTED** (joint paired bootstrap, 200 seeds, markets 6–30, one reference predator):
+- **R4 = 0.901 [0.890, 0.912]**, entirely ≤ 1.00. The search rule earns about 10% *less* per researcher-market than the best simple rule, which is TWAP.
+- **ΔL = +0.017 [+0.011, +0.024].** The search rule loses *more* of its edge to the predator than the capped rule.
+
+| rule | researcher PnL, 0 pred | researcher PnL, 1 pred | leakage L [95% CI] | predator PnL | researcher reverts (1 pred) | truth MSE (0 pred) |
+|---|---|---|---|---|---|---|
+| capped | 5.93 | 5.16 | 0.130 [0.123, 0.138] | 5.76 | 61% | 0.00129 |
+| naive | 5.95 | 4.56 | 0.234 [0.225, 0.245] | 10.06 | 65% | 0.00115 |
+| twap | 6.13 | 5.62 | 0.083 [0.077, 0.088] | 4.06 | 20% | 0.00214 |
+| random | 6.01 | 4.89 | 0.186 [0.179, 0.195] | 7.69 | 38% | 0.00144 |
+| expectiminimax | 5.94 | 5.07 | 0.147 [0.140, 0.155] | 7.22 | 50% | 0.00123 |
+
+**Descriptive:**
+- R4 with no predator = 0.970 [0.963, 0.975]: even without a predator the search does not beat TWAP.
+- **E4-V:**
+  - depth 1, 2, 3, 4 give leakage 0.140, 0.143, 0.147, 0.144, so depth barely matters;
+  - predator latency 0.05, 0.2, 0.5 gives leakage 0.142, 0.147, 0.159;
+  - single deviator: forecaster 0 searching alone earns +0.06 [−0.21, +0.31] per market more than when it uses the capped rule like everyone else (100 seeds). No detectable individual gain.
+- E4-V's chart step crashed on `users = None` after all data were written (84,000 rows, clean tree). The charts were redrawn from the saved CSVs with `tfs charts` (fix in `86108ba`); `run.log` keeps the traceback.
+
+**Interpretation (for the report; not a re-test):**
+- **TWAP wins on both counts.** Small fixed slices nearly remove crowding (reverts 20% vs 61%) and are less worth front-running (predator PnL 4.06 vs 5.76).
+- **TWAP's cost is slower price discovery:** truth MSE without predators is about 65% higher than under the capped rule. It is a trade-off, not a free lunch.
+- **The search's model misses the main force at play.** It models one trader against one predator, with a deterministic competitor push κ. It does not represent nine identical competitors sending orders at the same limit in the same block, so it cannot see that its own slices revert on that crowd.
+- This is the rent-dissipation mechanism of F-002 again: crowding among identically informed researchers, not the predator, is the main execution problem in this world (ρ = 1). The pre-registered risk ("the search may behave like naive") was partly borne out.
+- Better-informed searchers are possible: a model of the crowd, or measured predator targeting. They would be new designs, so they are not tried here.
+
+---
+
+## D-056 — Owner decisions after E4
+**Date:** 2026-10-10 · Owner.
+1. **The H4 verdict stands as pre-registered** (contradicted).
+2. **Report framing for E4.**
+   - Present algorithm correctness first: node-count benchmark, alpha-beta and Star1 savings, transposition-table hits, exactness tests.
+   - Then strategy performance: it lost to TWAP because the game model omits the crowd (one predator plus a fixed competitor push, against nine identical researchers at the same limit).
+   - Frame it as "minimax is only as good as its model of the game", citing that the pre-registration stated this risk.
+3. **TWAP is privately best but socially costly** (truth MSE +65% vs capped without predators): an externality between the individual optimum and the market's accuracy. The report says so.
+4. **Synthesis section** (`docs/report/synthesis.md`): the main adversary of an informed AI agent is the other informed agents sharing its signal, not the predator. It links F-002, H3b and H4 with their numbers.
+5. **Order of the remaining work:**
+   1. finish the benchmark;
+   2. shock scenarios at 200 seeds;
+   3. X-4 (status reported to the owner);
+   4. **X-5** (EXPLORATORY, time-boxed to about half a day): a crowd-aware search that models the n − 1 same-signal competitors' flow as a chance node, using their observed policy. Compared with TWAP and capped; cannot change verdicts; reported even if it shows no gain;
+   5. E5 whale (small);
+   6. minimal dashboard;
+   7. report.
+6. **Review preparation:** `docs/report/walkthroughs/search.md`, a plain-language walkthrough of the search code with file and line references, worked example trees (also tests) and likely examiner questions.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3; implemented in Phase 3b as D-053.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

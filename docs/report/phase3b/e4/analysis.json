@@ -1,0 +1,7 @@
+{
+  "note": "per-rule paired statistics; the H4 verdict comes from `python -m tfs h4`",
+  "windows": [
+    "6-30"
+  ],
+  "points": 5
+}

@@ -1,0 +1,10 @@
+wrote results/e4
+wrote results/e4/e4_seasons.png
+{
+  "note": "per-rule paired statistics; the H4 verdict comes from `python -m tfs h4`",
+  "windows": [
+    "6-30"
+  ],
+  "points": 5
+}
+exit 0

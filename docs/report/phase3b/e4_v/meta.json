@@ -1,0 +1,12 @@
+{
+  "git": {
+    "commit": "42743adc668817835c10461b3f4742144cc8f156",
+    "dirty": false
+  },
+  "seeds": [
+    0,
+    199
+  ],
+  "n_points": 14,
+  "config": "sim/experiments/configs/e4_v.yaml"
+}

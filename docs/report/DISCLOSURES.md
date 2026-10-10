@@ -54,5 +54,14 @@ Follow-up (Phase 4): predator variants r ∈ {0, 0.5, 1} enter the E7 tournament
 - **Batch differential tolerance** (D-043 amendment 4). Batch fill comparisons use an allowance derived from the price difference between engines, not a fixed number. Fill/no-fill disagreements still fail the test (there were none).
 - **Diagnosis run after the verdicts.** The oscillation analysis (`docs/report/phase3a/diagnosis/`) was done after seeing the results, to rule out a bug. It is descriptive and changes no verdict.
 
+## Phase 3b E4 (smart execution) — must appear next to the H4 verdict
+- **H4 was added by the project, not the SPEC.** It was pre-registered before any E4 code (`cfd0294`, D-053).
+- **The search's model was changed once, before any E4 run** (D-054, owner decision). The approved predator model (P(informed) = 1, sees every slice) made every slice worth about 0 at the measured competitor push, so the search's choice was noise. MIN now uses the reference predator's measured beliefs. Thresholds were unchanged.
+- **The κ measurement was corrected before any E4 run** (D-054). The first definition (every tick with a gap) gave 0, because most such ticks are equilibrium ticks. It now uses ticks where the forecaster trades. Both numbers are reported.
+- **Model limits.** The searcher assumes competitors push as in the capped baseline (κ = 0.87) and a predator with baseline beliefs. It does not model nine identical competitors at its own limit, which is what TWAP exploits. H4 is contradicted for *this* model of the game.
+- **TWAP's advantage costs accuracy:** truth MSE about 65% higher than the capped rule without predators.
+- **E4-V chart crash after the data were written.** The charts were redrawn from the saved CSVs, with no rerun.
+- **Single-deviator readout computed after the runs** (`docs/report/phase3b/deviator/`; descriptive).
+
 ## Exploratory analyses
 Everything under `docs/report/exploratory/` is exploratory. It was not pre-registered and never alters a verdict.
