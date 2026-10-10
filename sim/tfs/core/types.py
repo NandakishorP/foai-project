@@ -60,6 +60,7 @@ class Receipt:
     cost: float  # cash paid by the agent for shares (negative = cash received); 0 if reverted; excludes fees
     price_before: float
     price_after: float
+    requested: float | None = None  # batch fills: shares asked for (trade.shares is what filled); None = all-or-nothing
 
 
 @dataclass

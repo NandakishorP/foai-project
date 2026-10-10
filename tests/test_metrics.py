@@ -76,3 +76,11 @@ def test_research_share_priced_is_a_ratio_of_sums() -> None:
     share, num, den = research_share_priced([0.01, 0.1], [0.02, 1.0])
     assert share == pytest.approx(1 - 0.11 / 1.02)
     assert (num, den) == (pytest.approx(0.055), pytest.approx(0.51))
+
+
+def test_restricted_time_to_epsilon_counts_unsettled_as_the_full_window() -> None:
+    from tfs.metrics.accuracy import restricted_time_to_epsilon
+
+    p_avail = np.full(8, 0.5)
+    price = np.array([0.5, 0.9, 0.5, 0.5, 0.9, 0.9, 0.9, 0.9])
+    assert restricted_time_to_epsilon(price, p_avail, [1, 4], 0.05) == [1, 4]  # second window never settles

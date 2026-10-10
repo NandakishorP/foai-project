@@ -7,12 +7,14 @@ from collections.abc import Mapping, Sequence
 
 from tfs.core.types import Account, Bundle, Receipt, Side, Trade, Tx, Venue
 from tfs.engines.base import Engine, EngineState, VenueState
+from tfs.market.batch import SealedOrder, clear_batch
 from tfs.market.lmsr import LmsrMarket
 
 # Floating-point slack when comparing an average price to a limit, or holdings to a sale.
 _EPS = 1e-9
 
 BUILDER_ID = "builder"  # account that receives transaction fees and tips
+SLASHED_ID = "slashed"  # sink for escrow forfeited by orders that were not revealed (or were invalid)
 
 
 class EngineError(RuntimeError):
@@ -37,11 +39,12 @@ class FastEngine(Engine):
     def __init__(
         self, liquidity: Mapping[Venue, float], initial_cash: Mapping[str, float], base_fee: float = 0.0
     ) -> None:
-        if BUILDER_ID in initial_cash:
-            raise EngineError(f"{BUILDER_ID!r} is reserved for the block builder")
+        if BUILDER_ID in initial_cash or SLASHED_ID in initial_cash:
+            raise EngineError(f"{BUILDER_ID!r} and {SLASHED_ID!r} are reserved")
         self._venues = {venue: LmsrMarket(b=b) for venue, b in liquidity.items()}
         self._accounts = {agent: Account(cash=cash) for agent, cash in initial_cash.items()}
         self._accounts[BUILDER_ID] = Account(cash=0.0)
+        self._accounts[SLASHED_ID] = Account(cash=0.0)
         self.base_fee = base_fee
         self._block = 0
         self._resolved: int | None = None
@@ -111,6 +114,88 @@ class FastEngine(Engine):
     def builder_revenue(self) -> float:
         """Total fees and tips collected by the builder so far."""
         return self._accounts[BUILDER_ID].cash
+
+    # ---------------------------------------------------------- sealed batches
+
+    def commit(self, agent_id: str, escrow: float) -> bool:
+        """Lock `escrow` USDC for a sealed order (plus the base fee for the commit transaction)."""
+        acct = self._account(agent_id)
+        if acct.cash + _EPS < escrow + self.base_fee:
+            return False
+        acct.cash -= escrow + self.base_fee
+        self._accounts[BUILDER_ID].cash += self.base_fee
+        return True
+
+    def clear_batch(
+        self, revealed: Sequence[tuple[SealedOrder, float]], unrevealed: Sequence[tuple[str, float]], venue: Venue = Venue.MAIN
+    ) -> list[Receipt]:
+        """Settle one batch at a uniform price (D-046).
+
+        `revealed` holds (order, escrow) pairs; `unrevealed` holds (agent, escrow) pairs. An unrevealed
+        commitment, or a revealed order whose worst-case cost exceeds its escrow (only possible without a
+        validity proof), forfeits its escrow. Each filled order pays the uniform price from its escrow;
+        the rest is refunded. Matched YES/NO pairs become complete sets; only the net imbalance trades
+        with the LMSR. Afterwards every account holding YES and NO merges the pairs back into cash.
+        """
+        for agent, escrow in unrevealed:
+            self._account(agent)
+            self._accounts[SLASHED_ID].cash += escrow
+        market = self._venues[venue]
+        before = market.price()
+        valid: list[tuple[SealedOrder, float]] = []
+        for order, escrow in revealed:
+            if order.size * order.limit > escrow + _EPS:  # insolvent: discovered only at reveal
+                self._accounts[SLASHED_ID].cash += escrow
+            else:
+                valid.append((order, escrow))
+
+        orders = [o for o, _ in valid]
+        result = clear_batch(orders, market.q_yes, market.q_no, market.b)
+        if result.net_yes > 0:
+            market.q_yes += result.net_yes
+        else:
+            market.q_no -= result.net_yes
+        yes_filled = sum(result.fills[o.order_id] for o in orders if o.side is Side.YES)
+        no_filled = sum(result.fills[o.order_id] for o in orders if o.side is Side.NO)
+        new_sets = min(yes_filled, no_filled)
+        market.sets += new_sets
+        market.collateral += result.lmsr_cost + new_sets
+        after = market.price()
+
+        receipts = []
+        valid_ids = {o.order_id for o, _ in valid}
+        for order, escrow in revealed:  # one receipt per revealed order, in the same order
+            if order.order_id not in valid_ids:
+                trade = Trade(order.agent_id, venue, order.side, 0.0, order.limit)
+                receipts.append(Receipt(trade, False, "insolvent: escrow slashed", 0.0, before, after,
+                                        requested=order.size))
+                continue
+            acct = self._account(order.agent_id)
+            filled = result.fills[order.order_id]
+            paid = result.paid(order)
+            acct.cash += escrow - paid  # refund the unused escrow
+            if filled > 0:
+                key = (venue, order.side)
+                acct.shares[key] = acct.shares.get(key, 0.0) + filled
+            trade = Trade(order.agent_id, venue, order.side, filled, order.limit)
+            receipts.append(Receipt(trade, filled > 1e-12, "" if filled > 1e-12 else "not filled at the uniform price",
+                                    paid, before, after, requested=order.size))
+        self._merge_pairs(venue)
+        self._block += 1
+        return receipts
+
+    def _merge_pairs(self, venue: Venue) -> None:
+        """Turn every account's YES+NO pairs on `venue` back into cash (1 per pair)."""
+        market = self._venues[venue]
+        for acct in self._accounts.values():
+            yes, no = acct.position(venue, Side.YES), acct.position(venue, Side.NO)
+            pairs = min(yes, no)
+            if pairs > 0:
+                acct.shares[(venue, Side.YES)] = yes - pairs
+                acct.shares[(venue, Side.NO)] = no - pairs
+                acct.cash += pairs
+                market.collateral -= pairs
+                market.sets -= pairs
 
     # ------------------------------------------------------------------ internals
 

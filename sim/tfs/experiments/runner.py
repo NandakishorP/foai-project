@@ -30,7 +30,7 @@ import yaml
 
 from tfs.core.config import SimConfig, SweepPoint, expand_sweep, load_raw
 from tfs.core.types import Venue
-from tfs.metrics.accuracy import brier_scores, decompose, time_to_epsilon
+from tfs.metrics.accuracy import brier_scores, decompose, restricted_time_to_epsilon, time_to_epsilon
 from tfs.metrics.stats import mean_ci, rms_ci
 from tfs.simulation import MarketRecord, SeasonRecord, run_season
 
@@ -66,8 +66,21 @@ def market_row(record: MarketRecord, season: SeasonRecord, epsilon: float) -> di
     for k, ticks in enumerate(time_to_epsilon(record.price_main, record.p_avail, record.shock_ticks, epsilon)):
         row[f"time_to_eps_{k}"] = math.nan if ticks is None else ticks
         row[f"settled_{k}"] = 0.0 if ticks is None else 1.0  # share of runs that settle at all (with a CI)
+    for k, ticks in enumerate(restricted_time_to_epsilon(record.price_main, record.p_avail, record.shock_ticks, epsilon)):
+        row[f"rmst_eps_{k}"] = ticks
     for kind in AGENT_KINDS:
         row[f"pnl_{kind}"] = sum(v for aid, v in record.pnl.items() if record.kinds[aid] == kind)
+    # Execution quality (Phase 3a): unfilled share for researchers (H3b), overall fill rate, delays, slashing
+    asked = record.requested_by_kind.get("forecaster", 0.0)
+    got = record.filled_by_kind.get("forecaster", 0.0)
+    row["forecaster_unfilled_share"] = 1.0 - got / asked if asked > 0 else math.nan
+    total_asked = sum(record.requested_by_kind.values())
+    row["fill_rate"] = sum(record.filled_by_kind.values()) / total_asked if total_asked > 0 else math.nan
+    row["exec_delay"] = record.exec_delay
+    row["unrevealed"] = record.unrevealed
+    row["slashed"] = record.slashed
+    n_researchers = len(record.researchers)
+    row["pnl_per_researcher"] = row["pnl_forecaster"] / n_researchers if n_researchers else math.nan
     costs = [season.traits[i].cost for i in record.researchers]
     row["research_cost"] = sum(c for c in costs if c is not None)
     row["mm_pnl_main"] = record.mm_pnl[Venue.MAIN]

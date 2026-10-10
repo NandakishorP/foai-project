@@ -62,3 +62,16 @@ def time_to_epsilon(
         outside = np.flatnonzero(~window)
         result.append(0 if outside.size == 0 else int(outside[-1]) + 1)
     return result
+
+
+def restricted_time_to_epsilon(
+    price: np.ndarray, p_avail: np.ndarray, shock_ticks: Sequence[int], epsilon: float
+) -> list[int]:
+    """Time-to-epsilon after each shock, with a run that never settles counted as its full window.
+
+    This "restricted mean" form (H3c) keeps unsettled runs in the average instead of dropping
+    them: a defense that stops the price settling at all must count as slow, not as missing data.
+    """
+    bounds = sorted(shock_ticks) + [len(price)]
+    times = time_to_epsilon(price, p_avail, shock_ticks, epsilon)
+    return [end - start if t is None else t for t, start, end in zip(times, bounds[:-1], bounds[1:])]

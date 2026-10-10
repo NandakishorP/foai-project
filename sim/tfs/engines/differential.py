@@ -81,11 +81,14 @@ class DiffReport:
 
 
 def _balance_diffs(a: Mapping[str, Account], b: Mapping[str, Account]) -> tuple[float, float]:
-    cash = max(abs(a[k].cash - b[k].cash) for k in a)
-    shares = 0.0
-    for k in a:
-        for key in set(a[k].shares) | set(b[k].shares):
-            shares = max(shares, abs(a[k].shares.get(key, 0.0) - b[k].shares.get(key, 0.0)))
+    """Largest cash and share differences; an account missing on one side counts as empty."""
+    empty = Account(cash=0.0)
+    cash = shares = 0.0
+    for k in set(a) | set(b):
+        x, y = a.get(k, empty), b.get(k, empty)
+        cash = max(cash, abs(x.cash - y.cash))
+        for key in set(x.shares) | set(y.shares):
+            shares = max(shares, abs(x.shares.get(key, 0.0) - y.shares.get(key, 0.0)))
     return cash, shares
 
 

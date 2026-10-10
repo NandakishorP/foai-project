@@ -29,6 +29,13 @@ from tfs.core.types import Bundle, Trade, Tx
 
 class MempoolPolicy(str, Enum):
     PUBLIC = "public"  # everyone can read pending transactions (after their latency)
+    PRIVATE_RELAY = "private_relay"  # orders go straight to a trusted builder: nobody else sees them
+    COMMIT_REVEAL = "commit_reveal"  # main-market orders are sealed commitments (escrow + slashing, no proof)
+    ZK_BATCH = "zk_batch"  # sealed commitments with a validity proof (D-046)
+
+    @property
+    def batched(self) -> bool:
+        return self in (MempoolPolicy.COMMIT_REVEAL, MempoolPolicy.ZK_BATCH)
 
 
 @dataclass(frozen=True)
@@ -68,7 +75,9 @@ class Mempool:
         """The pending transactions an observer with this latency can read before the block is sealed."""
         if self.policy is MempoolPolicy.PUBLIC:
             return [p for p in pending if p.arrival + latency < 1.0]
-        raise ValueError(f"unknown policy {self.policy}")
+        # Private relay: nothing is public before inclusion. Batch policies: main-market orders are
+        # sealed, and what predators may see of them is the commit metadata (BatchDesk), not this list.
+        return []
 
 
 def is_plain_trade(p: PendingTx) -> bool:

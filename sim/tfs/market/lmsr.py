@@ -96,6 +96,9 @@ class LmsrMarket:
     q_yes: float = 0.0
     q_no: float = 0.0
     collateral: float = 0.0
+    # Net complete sets held by traders outside the market maker: created when a batch matches
+    # YES and NO buyers, destroyed when a trader merges a YES+NO pair. Always 0 in continuous trading.
+    sets: float = 0.0
 
     def price(self) -> float:
         return price_yes(self.q_yes, self.q_no, self.b)
@@ -114,5 +117,5 @@ class LmsrMarket:
         return paid
 
     def payout(self, y: int) -> float:
-        """Total owed to holders of the winning side at resolution."""
-        return self.q_yes if y == 1 else self.q_no
+        """Total owed to holders of the winning side at resolution: market-maker issued shares plus sets."""
+        return (self.q_yes if y == 1 else self.q_no) + self.sets

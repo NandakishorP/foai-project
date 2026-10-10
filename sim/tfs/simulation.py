@@ -36,7 +36,8 @@ from tfs.core.information import (
 )
 from tfs.core.rng import RngFactory
 from tfs.core.types import Bundle, Receipt, Trade, Tx, Venue
-from tfs.engines.fast import FastEngine
+from tfs.engines.fast import SLASHED_ID, FastEngine
+from tfs.mempool.batch_desk import BatchDesk
 from tfs.mempool.builder import BlockPlan, FeeBuilder, FrontRunRequest
 from tfs.mempool.mempool import Mempool, MempoolPolicy, PendingTx
 
@@ -120,6 +121,8 @@ def build_agents(
             )
         )
 
+    if a.predators.count and MempoolPolicy(cfg.mempool.policy).batched:
+        raise NotImplementedError("batch-policy predators are the metadata copy-traders (Phase 3a step 3)")
     memories = list(predator_memories) or [PredatorMemory() for _ in range(a.predators.count)]
     if len(memories) != a.predators.count:
         raise ValueError("one memory per predator is required")
@@ -157,6 +160,11 @@ class MarketRecord:
     reverts_by_kind: dict[str, int]  # of which reverted
     frontruns: int  # predator front-runs that filled
     victim_reverts: int  # victims that reverted after being front-run
+    requested_by_kind: dict[str, float]  # shares asked for, by agent kind (continuous and sealed orders)
+    filled_by_kind: dict[str, float]  # shares actually filled
+    exec_delay: float  # mean ticks from commitment to clearing over filled sealed orders (0 if continuous)
+    unrevealed: int  # sealed commitments never revealed (escrow slashed)
+    slashed: float  # escrow forfeited (unrevealed or insolvent commitments)
 
     def forecaster_pnl(self) -> dict[int, float]:
         """Gross trading PnL of each researching forecaster, by forecaster index."""
@@ -209,7 +217,8 @@ def run_market(
         {agent.agent_id: agent.bankroll for agent in agents},
         base_fee=cfg.mempool.base_fee,
     )
-    mempool = Mempool(MempoolPolicy(cfg.mempool.policy), rngs.stream("builder", market))
+    policy = MempoolPolicy(cfg.mempool.policy)
+    mempool = Mempool(policy, rngs.stream("builder", market))
     builder = FeeBuilder()
 
     ticks = cfg.market.ticks
@@ -221,8 +230,17 @@ def run_market(
     kind_of = {a.agent_id: a.kind for a in agents}
     attempts: dict[str, int] = defaultdict(int)
     reverts: dict[str, int] = defaultdict(int)
+    requested: dict[str, float] = defaultdict(float)
+    filled: dict[str, float] = defaultdict(float)
+    desk = BatchDesk(cfg.mempool, engine, kind_of) if policy.batched else None
 
     for tick in range(ticks):
+        # 0. Sealed batches: reveal and clear the batch whose window just closed (D-046).
+        batch_receipts: list[Receipt] = []
+        if desk is not None:
+            batch_receipts = desk.clear_if_due(tick)
+            for receipt in batch_receipts:
+                pending_receipts[receipt.trade.agent_id].append(receipt)
         prices = engine.prices()
         balances = engine.balances()
 
@@ -244,6 +262,9 @@ def run_market(
         for agent in traders:
             agent.perceive(observation(agent))
             txs.extend(agent.act())
+        if desk is not None:  # main-market orders become sealed commitments; the rest stays continuous
+            txs = desk.route(txs, tick) + desk.due_followups(tick)
+            desk.commit_due(tick)
         pending = mempool.admit(txs)
 
         # 3. Predators read what their latency allows and respond within the same block.
@@ -269,18 +290,26 @@ def run_market(
             kind = kind_of.get(receipt.trade.agent_id, "other")
             attempts[kind] += 1
             reverts[kind] += not receipt.ok
+            requested[kind] += abs(receipt.trade.shares)
+            filled[kind] += abs(receipt.trade.shares) if receipt.ok else 0.0
         by_trade = _receipts_by_trade(plan.txs, receipts)
         for request, victim in plan.placements:
             if by_trade[id(request.front)].ok:
                 frontruns += 1
                 victim_reverts += not by_trade[id(victim.tx)].ok
-        last_block = tuple(receipts)
+        last_block = tuple(batch_receipts) + tuple(receipts)  # revealed batch fills are public too
 
         after = engine.prices()
         if trace is not None:
             trace.append(BlockTrace(tick, pending, visible_ids, plan, receipts, prices[Venue.MAIN], after[Venue.MAIN]))
         price_main[tick], price_ref[tick] = after[Venue.MAIN], after[Venue.REF]
 
+    if desk is not None:
+        desk.clear_if_due(ticks, force=True)  # a batch still open at market end clears before resolution
+        for kind, qty in desk.stats.requested.items():
+            requested[kind] += qty
+        for kind, qty in desk.stats.filled.items():
+            filled[kind] += qty
     engine.resolve(tape.y)
     final = engine.balances()
     return MarketRecord(
@@ -304,6 +333,11 @@ def run_market(
         reverts_by_kind=dict(reverts),
         frontruns=frontruns,
         victim_reverts=victim_reverts,
+        requested_by_kind=dict(requested),
+        filled_by_kind=dict(filled),
+        exec_delay=desk.stats.delay_sum / desk.stats.delay_count if desk and desk.stats.delay_count else 0.0,
+        unrevealed=desk.stats.unrevealed if desk else 0,
+        slashed=final[SLASHED_ID].cash,
     )
 
 

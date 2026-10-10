@@ -125,6 +125,11 @@ agents:
 mempool:
   policy: public          # pending transactions are readable by anyone (after their latency)
   base_fee: 0.0           # 0 so the no-predator baseline is exactly the frozen calibration (D-033)
+  # Sealed-batch settings (used only by commit_reveal / zk_batch; D-046):
+  batch_interval: 5       # K = 5 blocks ~ one minute of 12-second blocks (E3 reference); swept {1,2,5,10,20}
+  escrow_tiers: [5.0, 25.0, 125.0, 625.0]  # x5 steps: escrow shows only a coarse size bucket
+  proving_delay: 0        # PLACEHOLDER: set from the bb proving benchmark before any E3 run (D-046 point 7)
+  sender_visible: true    # commits come from the trader's own address (reference); false = relayer variant
 
 metrics:
   epsilon: 0.05           # "close enough" to p*_avail for time-to-epsilon

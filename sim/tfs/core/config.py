@@ -170,10 +170,17 @@ class AgentsConfig:
     predators: PredatorConfig
 
 
+MempoolPolicyName = Literal["public", "private_relay", "commit_reveal", "zk_batch"]
+
+
 @dataclass(frozen=True)
 class MempoolConfig:
-    policy: Literal["public"]  # who can read pending transactions (Phase 3 adds private relay, commit-reveal, ZK)
+    policy: MempoolPolicyName  # how main-market orders reach the chain (SPEC §3.2, D-046)
     base_fee: float  # fee every included transaction pays the builder (0 in the reference config, D-033)
+    batch_interval: int  # K: blocks per sealed batch (commit_reveal / zk_batch)
+    escrow_tiers: tuple[float, ...]  # fixed escrow sizes (USDC), so escrow does not reveal order size
+    proving_delay: int  # ticks to generate a ZK proof before a sealed order can be committed (zk_batch)
+    sender_visible: bool  # can observers see who sent a commitment? False = relayer variant
 
 
 @dataclass(frozen=True)
@@ -206,6 +213,10 @@ def _validate(cfg: SimConfig) -> None:
     for shock in cfg.information.shocks:
         if not 0 <= shock.tick < cfg.market.ticks:
             raise ConfigError(f"shock tick {shock.tick} is outside the market")
+    if cfg.mempool.batch_interval < 1:
+        raise ConfigError("mempool.batch_interval must be at least 1")
+    if list(cfg.mempool.escrow_tiers) != sorted(cfg.mempool.escrow_tiers) or not cfg.mempool.escrow_tiers:
+        raise ConfigError("mempool.escrow_tiers must be a non-empty increasing list")
     if not 0.0 <= cfg.information.private.rho <= 1.0:
         raise ConfigError("information.private.rho must be in [0, 1]")
     if cfg.agents.trend.fast_span >= cfg.agents.trend.slow_span:
