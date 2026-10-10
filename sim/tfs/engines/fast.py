@@ -37,7 +37,8 @@ class FastEngine(Engine):
     """
 
     def __init__(
-        self, liquidity: Mapping[Venue, float], initial_cash: Mapping[str, float], base_fee: float = 0.0
+        self, liquidity: Mapping[Venue, float], initial_cash: Mapping[str, float], base_fee: float = 0.0,
+        batch_rule: str = "average",
     ) -> None:
         if BUILDER_ID in initial_cash or SLASHED_ID in initial_cash:
             raise EngineError(f"{BUILDER_ID!r} and {SLASHED_ID!r} are reserved")
@@ -46,6 +47,8 @@ class FastEngine(Engine):
         self._accounts[BUILDER_ID] = Account(cash=0.0)
         self._accounts[SLASHED_ID] = Account(cash=0.0)
         self.base_fee = base_fee
+        self.batch_rule = batch_rule  # "average" (D-046) or "marginal" (EXPLORATORY X-4; FastEngine only)
+        self.batch_surplus = 0.0  # marginal-minus-average payments kept by the LMSR (X-4)
         self._block = 0
         self._resolved: int | None = None
         self._mm_pnl: dict[Venue, float] = {}
@@ -150,7 +153,7 @@ class FastEngine(Engine):
                 valid.append((order, escrow))
 
         orders = [o for o, _ in valid]
-        result = clear_batch(orders, market.q_yes, market.q_no, market.b)
+        result = clear_batch(orders, market.q_yes, market.q_no, market.b, self.batch_rule)
         if result.net_yes > 0:
             market.q_yes += result.net_yes
         else:
@@ -160,6 +163,9 @@ class FastEngine(Engine):
         new_sets = min(yes_filled, no_filled)
         market.sets += new_sets
         market.collateral += result.lmsr_cost + new_sets
+        if result.surplus:  # X-4: the LMSR keeps what traders paid beyond its cost (0 under the average rule)
+            market.collateral += result.surplus
+            self.batch_surplus += result.surplus
         after = market.price()
 
         receipts = []

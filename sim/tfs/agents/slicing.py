@@ -11,6 +11,7 @@ with one method, so the E4 strategies can be compared with everything else held 
 | twap            | shortfall / n, at most the push cap                                 |
 | random          | a random fraction from the search's action set {0, 1/8, 1/4, 1/2, 1}|
 | expectiminimax  | the first move of the order-splitting game (tfs.search)              |
+| crowd_expectiminimax | the same, with the same-signal crowd in the game (EXPLORATORY X-5) |
 
 The push cap is the size that moves the price exactly to the trader's belief; no rule
 ever exceeds it, so no trade is made at a loss under the trader's own belief.
@@ -92,5 +93,5 @@ def make_slice_rule(ex: ExecutionConfig, max_order: float, index: int, rng: np.r
         return Twap(ex.twap_slices)
     if rule == "random":
         return RandomSlice(rng)
-    assert policy is not None, "the expectiminimax rule needs the season's SplittingPolicy"
+    assert policy is not None, "the search rules need the season's SplittingPolicy"
     return SearchSlice(policy)

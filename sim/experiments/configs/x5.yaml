@@ -1,0 +1,33 @@
+# X-5 (EXPLORATORY; owner decision D-056; cannot change any verdict): crowd-aware order splitting.
+# The order-splitting game gains a chance node for the same-signal crowd trading ahead of the slice in
+# the same block (D-057). Its five equally likely outcomes and the remaining closure were measured on the
+# no-predator capped baseline (`tfs measure-env --seeds 50`, 337 trading blocks; before any X-5 run):
+#   crowd_ahead = 10th/30th/50th/70th/90th percentiles of the share of forecaster 0's gap the other
+#                 forecasters close before its own order executes;
+#   crowd_kappa = median share everyone else closes in the rest of the block.
+# Compared with E4's capped / twap / expectiminimax cells, and E4-V's depth-2 search, on the same seeds
+# (E4 setting, markets 6-30).
+extends: base.yaml
+name: x5
+season:
+  n_markets: 30
+agents:
+  forecasters:
+    execution:
+      rule: crowd_expectiminimax
+      depth: 2            # set from runtime alone, before any X-5 run (D-057): the crowd node makes depth 3 cost
+                          #   ~8 min per season. E4-V showed depth 1-4 barely matters (leakage within 0.01);
+                          #   E4-V's depth-2 point gives the matched comparison for the plain search.
+      crowd_ahead: [0.0, 0.1557, 0.6471, 0.9632, 1.0]
+      crowd_kappa: 0.0159
+analysis:
+  hypothesis: null
+  note: "EXPLORATORY X-5: compare with E4 on the same seeds (docs/report/exploratory/x5/analysis.py)"
+  score_from_market: 5
+  pair_on: agents.predators.count
+sweep:
+  crossed:
+    agents.predators.count: [0, 1]
+  one_at_a_time:
+    agents.forecasters.execution.users: [1]
+    agents.forecasters.execution.depth: [1]

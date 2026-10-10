@@ -118,3 +118,41 @@ def test_matches_a_brute_force_grid_solver(book) -> None:
     if sign_change.size:
         crossing = grid[sign_change[0]]
         assert abs(crossing - c.price_yes) < 3e-4, (crossing, c.price_yes)
+
+
+# --------------------------------------------------------------------------- X-4: marginal clearing (EXPLORATORY)
+
+
+@settings(max_examples=300, deadline=None)
+@given(book=book_st, state=state_st)
+def test_marginal_rule_ends_the_market_at_the_clearing_price(book, state) -> None:
+    """Under X-4 the LMSR's price after the batch equals the uniform price: no filled limit is overshot."""
+    q_yes, q_no = max(state[0], 0.0), max(state[1], 0.0)
+    orders = _orders(book)
+    c = clear_batch(orders, q_yes, q_no, B, rule="marginal")
+    after = price_yes(q_yes + max(c.net_yes, 0.0), q_no + max(-c.net_yes, 0.0), B)
+    assert after == pytest.approx(c.price_yes, abs=1e-9)
+    for o in orders:
+        if c.fills[o.order_id] > 1e-9:
+            assert o.accepts(c.price_yes)
+
+
+@settings(max_examples=300, deadline=None)
+@given(book=book_st, state=state_st)
+def test_marginal_rule_payments_cover_cost_sets_and_a_nonnegative_surplus(book, state) -> None:
+    q_yes, q_no = max(state[0], 0.0), max(state[1], 0.0)
+    orders = _orders(book)
+    c = clear_batch(orders, q_yes, q_no, B, rule="marginal")
+    paid = sum(c.paid(o) for o in orders)
+    assert c.surplus >= -1e-9
+    assert paid == pytest.approx(cost_of_sets(c, orders) + c.lmsr_cost + c.surplus, abs=1e-7)
+
+
+def test_identical_researchers_no_longer_overshoot_their_shared_limit() -> None:
+    """Five identical YES orders at 0.6 from 0.5: the average rule ends above 0.6, the marginal rule at 0.6."""
+    orders = [SealedOrder(i, f"r{i}", Side.YES, 40.0, 0.6) for i in range(5)]
+    avg = clear_batch(orders, 0.0, 0.0, B, rule="average")
+    marg = clear_batch(orders, 0.0, 0.0, B, rule="marginal")
+    assert price_yes(avg.net_yes, 0.0, B) > 0.65  # the marginal price ends well past every limit
+    assert price_yes(marg.net_yes, 0.0, B) == pytest.approx(0.6, abs=1e-9)
+    assert marg.net_yes < avg.net_yes and marg.surplus > 0

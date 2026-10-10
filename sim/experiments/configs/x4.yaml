@@ -1,0 +1,21 @@
+# X-4 (EXPLORATORY; owner decision D-052; cannot change any verdict): limit-respecting marginal clearing.
+# The uniform batch price is the LMSR's post-trade marginal price, so the market ends at the clearing
+# price and never past a filled limit; the LMSR keeps the marginal-minus-average surplus (reported).
+# The E3-F setting (research forced, 30-market seasons, markets 6-30, K = 5), 200 seeds paired with E3-F.
+# commit_reveal (zero proving delay) is included as the realistic ZK outcome (D-052 item 3).
+# FastEngine only: the Solidity SealedBatchAuction keeps the pre-registered average rule.
+extends: base.yaml
+name: x4
+season:
+  n_markets: 30
+mempool:
+  clearing: marginal
+analysis:
+  hypothesis: null
+  note: "EXPLORATORY X-4: compare with E3-F (average clearing) on the same seeds"
+  score_from_market: 5
+  pair_on: agents.predators.count
+sweep:
+  crossed:
+    mempool.policy: [public, commit_reveal, zk_batch]
+    agents.predators.count: [0, 1]

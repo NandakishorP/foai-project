@@ -201,6 +201,7 @@ class MarketRecord:
     trades_main: np.ndarray  # executed main-market trades per tick
     reverts_main: np.ndarray  # reverted main-market trades per tick
     shock_false: tuple[bool, ...]  # was each shock false news?
+    lmsr_surplus: float  # X-4: batch payments beyond the LMSR's cost, kept by the LMSR (0 otherwise)
     correction_ticks: tuple[int, ...]  # when each shock's status was published
 
     def forecaster_pnl(self) -> dict[int, float]:
@@ -290,6 +291,7 @@ def run_market(
         {Venue.MAIN: cfg.market.b_main, Venue.REF: cfg.market.b_ref},
         {agent.agent_id: agent.bankroll for agent in agents},
         base_fee=cfg.mempool.base_fee,
+        batch_rule=cfg.mempool.clearing,
     )
     policy = MempoolPolicy(cfg.mempool.policy)
     mempool = Mempool(policy, rngs.stream("builder", market))
@@ -441,6 +443,7 @@ def run_market(
         reverts_main=activity.reverts,
         shock_false=tape.shock_false,
         correction_ticks=tape.correction_ticks,
+        lmsr_surplus=engine.batch_surplus,
     )
 
 
@@ -498,7 +501,7 @@ class SeasonRecord:
 def season_policy(cfg: SimConfig) -> SplittingPolicy | None:
     """The order-splitting policy forecasters share for a season, if any of them searches (E4)."""
     ex = cfg.agents.forecasters.execution
-    if ex.rule != "expectiminimax":
+    if ex.rule not in ("expectiminimax", "crowd_expectiminimax"):
         return None
     return SplittingPolicy(OrderSplittingGame(split_params(cfg)), depth=ex.depth)
 
