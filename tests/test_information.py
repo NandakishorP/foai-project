@@ -187,3 +187,24 @@ def test_adding_forecasters_keeps_existing_draws(base_config: SimConfig) -> None
     a, b = _tape(small, 9), _tape(cfg, 9)
     np.testing.assert_allclose(a.private_values[0], b.private_values[0])
     np.testing.assert_array_equal(a.public_llr, b.public_llr)
+
+
+def test_staggered_research_arrives_late_never_early(base_config: SimConfig) -> None:
+    """With max_delay 3 each forecaster sees each research signal 0-3 ticks after emission (exploratory X-3)."""
+    cfg = replace_in(_with_rho(base_config, 0.5), "information.private.max_delay", 3)
+    tape = _tape(cfg, 4)
+    plain = _tape(_with_rho(base_config, 0.5), 4)
+    np.testing.assert_array_equal(tape.private_values, plain.private_values)  # emission (and p*) unchanged
+    assert not np.array_equal(tape.private_values_seen, tape.private_values)
+    # every tick's emitted signal is seen within the next 3 ticks: cumulative arrivals lag emissions by <= 3 ticks
+    for i in range(tape.private_values.shape[0]):
+        events = np.flatnonzero(tape.private_values[i])
+        arrivals = np.flatnonzero(tape.private_values_seen[i])
+        assert arrivals.min() >= events.min()
+        assert all(any(0 <= a - e <= 3 for e in events) for a in arrivals)
+    assert np.sum(tape.private_values_seen[:, :-3]) != 0
+
+
+def test_no_delay_sees_exactly_the_emitted_signals(base_config: SimConfig) -> None:
+    tape = _tape(base_config, 4)
+    assert tape.private_values_seen is tape.private_values

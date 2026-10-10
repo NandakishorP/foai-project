@@ -37,6 +37,7 @@ information:
                       # inside (0,1) for most of the market, so accuracy metrics do not saturate.
     rho: 1.0          # FROZEN by calibration D-029/D-030: one shared research signal (textbook
                       #   Grossman-Stiglitz). Only rho = 1 met both baseline criteria; see the grid.
+    max_delay: 0      # research reaches all researchers at once; exploratory X-3 staggers it by 0-3 ticks
   shocks:
     - tick: 100       # one true breaking-news event mid-market (Topic 6 shock; time-to-epsilon)
       nats: 1.0       # a single signal worth half of all routine public news

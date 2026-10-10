@@ -1,0 +1,12 @@
+# EXPLORATORY X-2 (D-039): does the participation gap keep widening over 60-market seasons?
+extends: ../e2b.yaml
+name: x2_long_season
+season:
+  n_markets: 60
+analysis:
+  hypothesis: null
+  pair_on: agents.predators.count
+  windows: [[20, 29], [30, 39], [40, 49], [50, 59]]
+sweep:
+  crossed:
+    agents.predators.count: [0, 1]

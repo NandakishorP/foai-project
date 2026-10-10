@@ -73,6 +73,9 @@ def market_row(record: MarketRecord, season: SeasonRecord, epsilon: float) -> di
     row["mm_pnl_main"] = record.mm_pnl[Venue.MAIN]
     row["mm_pnl_ref"] = record.mm_pnl[Venue.REF]
     row["builder_revenue"] = record.builder_revenue
+    # crowding (F-002): share of informed trades that revert, mostly on their own limits
+    attempts = record.attempts_by_kind.get("forecaster", 0)
+    row["forecaster_revert_share"] = record.reverts_by_kind.get("forecaster", 0) / attempts if attempts else math.nan
     row["frontruns"] = record.frontruns
     row["victim_reverts"] = record.victim_reverts
     row["executed"] = record.executed

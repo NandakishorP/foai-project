@@ -1,0 +1,12 @@
+# EXPLORATORY X-1b (D-039): own_impact_reversion in {0, 0.5} at the reference E2b setting.
+extends: ../e2b.yaml
+name: x1_reversion_e2b
+analysis:
+  hypothesis: null
+  score_from_market: 20
+  pair_on: agents.predators.count
+sweep:
+  crossed:
+    agents.predators.count: [0, 1]
+  one_at_a_time:
+    agents.predators.own_impact_reversion: [0.0, 0.5]

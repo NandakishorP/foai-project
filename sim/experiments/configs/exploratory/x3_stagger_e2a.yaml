@@ -1,0 +1,16 @@
+# EXPLORATORY X-3a (D-039): is researcher crowding robust to staggered research arrival?
+# Research reaches each researcher 0-3 ticks after emission (max_delay 3); max_delay 0 for comparison.
+extends: ../e2a.yaml
+name: x3_stagger_e2a
+information:
+  private:
+    max_delay: 3
+analysis:
+  hypothesis: null
+  score_from_market: 5
+  pair_on: agents.predators.count
+sweep:
+  crossed:
+    agents.predators.count: [0, 1]
+  one_at_a_time:
+    information.private.max_delay: [0]

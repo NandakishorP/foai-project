@@ -65,6 +65,7 @@ class PrivateSignalConfig:
     rate: float  # expected research events per tick; at each event every potential forecaster gets a signal
     pooled_nats: float  # expected LLR per market of ALL forecasters' research combined (full participation)
     rho: float  # correlation of two forecasters' signals given Y (0 = independent, 1 = one shared signal)
+    max_delay: int  # each forecaster receives each research event 0..max_delay ticks late (0 = simultaneous)
 
 
 @dataclass(frozen=True)

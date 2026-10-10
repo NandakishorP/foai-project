@@ -145,7 +145,8 @@ class SignalTape:
     y: int  # the hidden outcome
     prior_logodds: float
     public_llr: np.ndarray  # shape (ticks,): LLR of public news and shocks published at each tick
-    private_values: np.ndarray  # shape (n_forecasters, ticks): sum of each forecaster's raw research signals per tick
+    private_values: np.ndarray  # shape (n_forecasters, ticks): each forecaster's raw research signals, by emission tick
+    private_values_seen: np.ndarray  # same signals by the tick each forecaster receives them (= emission if no delay)
     noise: ResearchNoise
     shock_ticks: tuple[int, ...]
 
@@ -155,8 +156,8 @@ class SignalTape:
 
     @property
     def own_private_llr(self) -> np.ndarray:
-        """What each forecaster alone can infer from its own research, per tick (k = 1 posterior)."""
-        return self.noise.group_coefficient(1) * self.private_values
+        """What each forecaster alone can infer from its own research, per tick it *receives* it (k = 1 posterior)."""
+        return self.noise.group_coefficient(1) * self.private_values_seen
 
     def group_private_llr(self, researchers: Collection[int]) -> np.ndarray:
         """Exact LLR per tick of the research of a group, accounting for the shared noise."""
@@ -180,12 +181,19 @@ def _poisson_signals_llr(
 
 def _research_values(
     cfg: SimConfig, rngs: RngFactory, market: int, sign: int, noise: ResearchNoise
-) -> np.ndarray:
-    """Raw research signals of every potential forecaster, summed per tick.
+) -> tuple[np.ndarray, np.ndarray]:
+    """Raw research signals of every potential forecaster, summed per tick: (by emission, by arrival).
 
     Event times and the common component u come from shared streams. Each
     forecaster's own noise e_i comes from its own stream, so it is unaffected
     by how many other forecasters exist.
+
+    Staggered arrival (exploratory X-3, `max_delay` > 0): each forecaster
+    receives each research event 0..max_delay ticks after it is emitted, with
+    the delay drawn per (event, forecaster) from the forecaster's own delay
+    stream. Signals that would arrive after the market ends are never seen.
+    The ideal prices keep emission times, as they do for public news latency,
+    so p*_avail is unchanged and the decomposition (D-001) still holds.
     """
     ticks = cfg.market.ticks
     n = cfg.agents.forecasters.count
@@ -194,11 +202,18 @@ def _research_values(
     event_tick = np.repeat(np.arange(ticks), counts)
     common = math.sqrt(noise.common_var) * rngs.stream("research_common", market).standard_normal(n_events)
 
+    max_delay = cfg.information.private.max_delay
     values = np.zeros((n, ticks))
+    seen = values if max_delay == 0 else np.zeros((n, ticks))
     for i in range(n):
         own = math.sqrt(noise.idio_var) * rngs.stream("private", market, i).standard_normal(n_events)
-        np.add.at(values[i], event_tick, sign * noise.mu + common + own)
-    return values
+        signals = sign * noise.mu + common + own
+        np.add.at(values[i], event_tick, signals)
+        if max_delay > 0:
+            arrival = event_tick + rngs.stream("research_delay", market, i).integers(0, max_delay + 1, n_events)
+            on_time = arrival < ticks
+            np.add.at(seen[i], arrival[on_time], signals[on_time])
+    return values, seen
 
 
 def generate_tape(cfg: SimConfig, rngs: RngFactory, market: int) -> SignalTape:
@@ -219,11 +234,13 @@ def generate_tape(cfg: SimConfig, rngs: RngFactory, market: int) -> SignalTape:
         public_llr[shock.tick] += signal_llr(value, info.mu, shock_sigma)
 
     noise = research_noise(cfg)
+    private_values, private_values_seen = _research_values(cfg, rngs, market, sign, noise)
     return SignalTape(
         y=y,
         prior_logodds=logit(prior),
         public_llr=public_llr,
-        private_values=_research_values(cfg, rngs, market, sign, noise),
+        private_values=private_values,
+        private_values_seen=private_values_seen,
         noise=noise,
         shock_ticks=tuple(s.tick for s in info.shocks),
     )

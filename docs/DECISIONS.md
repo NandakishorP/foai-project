@@ -480,6 +480,16 @@ E3's core comparison is a 2×2: {predators 0, 1} × {PUBLIC, ZK_BATCH}. It separ
 
 ---
 
+## D-039 — Exploratory robustness set X-1..X-3 (declared before running; EXPLORATORY)
+**Date:** 2026-10-10 · Owner request. Configs: `sim/experiments/configs/exploratory/`. Outputs: `docs/report/exploratory/`. Reference setting, 200 paired seeds, the same paired statistics. **No verdicts: nothing here alters H1/H2.**
+- **X-1** `own_impact_reversion` ∈ {0, 0.5}, alongside the reference 1, at the E2a and E2b settings.
+- **X-2** E2b with 60-market seasons. Paired participation gap and Δ truth lost in windows 21–30, 31–40, 41–50, 51–60.
+- **X-3** Staggered research arrival: each researcher receives each research event 0–3 ticks after emission (`information.private.max_delay: 3`; delay drawn per event and researcher from its own stream). Ideal prices keep emission times, so the decomposition still holds (test added). Run at the E2a and E2b settings, with max_delay 0 in the same run for comparison.
+- **New crowding metric** for F-002: `forecaster_revert_share` = share of researchers' trades that revert.
+- **Analysis code** now supports windows and exploratory runs without verdicts. Re-analysing the saved E2a/E2b runs with the new code reproduces both archived verdicts with identical statistics.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

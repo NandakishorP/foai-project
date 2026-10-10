@@ -1,0 +1,15 @@
+# EXPLORATORY X-3b (D-039): staggered research arrival in the long run (E2b setting).
+extends: ../e2b.yaml
+name: x3_stagger_e2b
+information:
+  private:
+    max_delay: 3
+analysis:
+  hypothesis: null
+  score_from_market: 20
+  pair_on: agents.predators.count
+sweep:
+  crossed:
+    agents.predators.count: [0, 1]
+  one_at_a_time:
+    information.private.max_delay: [0]

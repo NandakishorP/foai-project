@@ -1,0 +1,13 @@
+# EXPLORATORY X-1a (D-039): how much does predator strength depend on own_impact_reversion?
+# Reference E2a setting; r in {0, 0.5} alongside the reference r = 1. Never alters a verdict.
+extends: ../e2a.yaml
+name: x1_reversion_e2a
+analysis:
+  hypothesis: null
+  score_from_market: 5
+  pair_on: agents.predators.count
+sweep:
+  crossed:
+    agents.predators.count: [0, 1]
+  one_at_a_time:
+    agents.predators.own_impact_reversion: [0.0, 0.5]

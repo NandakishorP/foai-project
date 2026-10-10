@@ -152,6 +152,8 @@ class MarketRecord:
     executed: int  # trades that filled
     reverted: int  # trades that reverted
     builder_revenue: float  # fees and tips collected by the builder
+    attempts_by_kind: dict[str, int]  # trades sent, by agent kind
+    reverts_by_kind: dict[str, int]  # of which reverted
     frontruns: int  # predator front-runs that filled
     victim_reverts: int  # victims that reverted after being front-run
 
@@ -215,6 +217,9 @@ def run_market(
     last_block: tuple[Receipt, ...] = ()
     own_private_llr = tape.own_private_llr  # what each forecaster can infer from its own research
     executed = reverted = frontruns = victim_reverts = 0
+    kind_of = {a.agent_id: a.kind for a in agents}
+    attempts: dict[str, int] = defaultdict(int)
+    reverts: dict[str, int] = defaultdict(int)
 
     for tick in range(ticks):
         prices = engine.prices()
@@ -260,6 +265,9 @@ def run_market(
             pending_receipts[receipt.trade.agent_id].append(receipt)
             executed += receipt.ok
             reverted += not receipt.ok
+            kind = kind_of.get(receipt.trade.agent_id, "other")
+            attempts[kind] += 1
+            reverts[kind] += not receipt.ok
         by_trade = _receipts_by_trade(plan.txs, receipts)
         for request, victim in plan.placements:
             if by_trade[id(request.front)].ok:
@@ -290,6 +298,8 @@ def run_market(
         executed=executed,
         reverted=reverted,
         builder_revenue=engine.builder_revenue(),
+        attempts_by_kind=dict(attempts),
+        reverts_by_kind=dict(reverts),
         frontruns=frontruns,
         victim_reverts=victim_reverts,
     )
