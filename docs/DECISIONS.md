@@ -460,6 +460,26 @@ The first E2a run crashed after ~11 minutes with `OverflowError` in `cost_at_pri
 
 ---
 
+## D-037 — Owner ratification after Phase 2a
+**Date:** 2026-10-10
+
+1. **Verdicts stand as pre-registered**: H1 partly supported, H2 contradicted. They are not re-run or re-analysed to change them.
+2. **Ratified:** the D-032 thresholds (H2 "sharp" > +30%, the H2 contradiction rule, leakage = share of edge lost) and the D-034 predator fixes. Both are disclosed in the report (`docs/report/DISCLOSURES.md`).
+3. **Note for the report on `own_impact_reversion` (owner's note, with Claude's correction, agreed for the write-up).**
+   - LMSR cost is path-independent: buying x and selling x with nothing in between costs exactly zero. So the predator's own impact always comes back out *through its own exit*.
+   - In the EV formula this is the r = 0 case: if no one else reacts, the predator's exit removes its own impact and the round trip is neutral (the sandwich gain from the victim remains).
+   - r = 1 assumes *other* traders also push the impact back before the exit. The exit then moves the price a second time, so the predator pays for its own impact twice (a loss of about x²/b).
+   - r = 1 is therefore the pessimistic assumption about other traders' reaction, not a consequence of path independence. The debugging observation in D-034 (an r = 0 predator round-tripping thousands of shares at a loss) shows other traders do push back in this market. Exploratory run X-1 measures how much predator strength depends on r.
+
+---
+
+## D-038 — Phase 3 design note: E3 as a 2×2 (to be pre-registered at Phase 3 start)
+**Date:** 2026-10-10 · Owner decision.
+
+E3's core comparison is a 2×2: {predators 0, 1} × {PUBLIC, ZK_BATCH}. It separates the anti-predator effect of batching (the predator × policy interaction) from its anti-crowding effect: batching also stops researchers with a shared signal from crowding each other out within a block (F-002), with or without predators. The batch interval K, the costs of §5.1 and the other baselines (PRIVATE_RELAY, COMMIT_REVEAL) come on top. Exact criteria for H3 are pre-registered at Phase 3 start.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
