@@ -23,6 +23,11 @@ market:
                       #   combined forecaster bankroll (10 x 100), so informed capital can move
                       #   the price but not trivially. Swept in E1.
   b_ref: 30.0         # reference venue is smaller than the main market (DECISIONS D-005)
+  depeg:              # collateral depeg scenario (shock S-D, D-053); off in the baseline
+    start: 100
+    end: 130          # 30 ticks (about 6 minutes of 12-second blocks)
+    discount: 0.0     # S-D sets 0.10: the main market's USDC trades at 0.90 dollars during the window
+    noise_withdrawal: 0.0  # S-D sweeps {0, 0.5, 1}: share of main noise traders that sit the window out
 
 information:
   mu: 1.0             # only mu/sigma matters; mu fixes the scale
@@ -41,6 +46,10 @@ information:
   shocks:
     - tick: 100       # one true breaking-news event mid-market (Topic 6 shock; time-to-epsilon)
       nats: 1.0       # a single signal worth half of all routine public news
+      status: drawn   # false with probability q_false (0 here: always true); shock scenarios may force it
+  q_false: 0.0        # chance that breaking news is false (Q1, D-053). 0 in the baseline: earlier results unchanged.
+                      #   Shock scenarios use 0.2 (sensitivity 0.1, 0.4): informative but credibly doubtful
+  correction_delay: 20  # ticks until a shock's status is published: about the gap between routine news items
 
 agents:
   belief_model: own_signals   # SPEC default; price_anchored is the alternative (DECISIONS D-013)

@@ -1,0 +1,17 @@
+# S-T (descriptive; DECISIONS D-053): TRUE breaking news at tick 100. Everyone knows 20% of breaking
+# news is false, so the shock is discounted until its status is confirmed 20 ticks later.
+# One 200-tick market per seed, research forced, no predators, PUBLIC. Trend followers on (2) vs off (0).
+extends: base.yaml
+name: shock_t
+information:
+  q_false: 0.2
+  shocks:
+    - {tick: 100, nats: 1.0, status: "true"}
+analysis:
+  events: [shock, correction]
+sweep:
+  crossed:
+    information.shocks:
+      - [{tick: 100, nats: 1.0, status: "true"}]
+      - [{tick: 100, nats: 3.0, status: "true"}]
+    agents.trend.count: [0, 2]

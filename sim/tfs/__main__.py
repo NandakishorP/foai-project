@@ -174,6 +174,15 @@ def cmd_search_bench(args: argparse.Namespace) -> None:
               f"max |value - plain| {r.max_value_error:.1e}  ({r.states} states)")
 
 
+def cmd_shock_study(args: argparse.Namespace) -> None:
+    """Shock scenarios S-T, S-F, S-D, S-K (descriptive stability analysis, D-053)."""
+    from tfs.experiments.runner import _git_state
+    from tfs.experiments.shock_study import run
+
+    out = run(args.config, args.seeds, args.workers, args.out, _git_state())
+    print(f"wrote {out}")
+
+
 def cmd_measure_env(args: argparse.Namespace) -> None:
     """Environment numbers for the order-splitting game, measured on baseline runs (D-053)."""
     from tfs.core.config import expand_sweep
@@ -237,6 +246,9 @@ def main() -> None:
     sb.add_argument("--plain-depth5", type=int, default=50, help="states for plain expectiminimax at depth 5")
     sb.add_argument("--out", type=Path, default=Path("results"))
     sb.set_defaults(func=cmd_search_bench)
+
+    common(ss := sub.add_parser("shock-study", help="shock scenario: stability metrics and event-study plots"))
+    ss.set_defaults(func=cmd_shock_study)
 
     me = sub.add_parser("measure-env", help="environment numbers for the order-splitting game (D-053)")
     me.add_argument("--seeds", type=int, default=50)

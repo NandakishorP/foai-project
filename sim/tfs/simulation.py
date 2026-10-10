@@ -24,7 +24,7 @@ from tfs.agents.forecaster import InformedForecaster
 from tfs.agents.attackers import FreeOptionTrader, NonRevealGriefer, SpamCommitter
 from tfs.agents.metadata_predator import MetadataPredator
 from tfs.agents.noise import NoiseTrader
-from tfs.agents.predator import Predator, PredatorMemory
+from tfs.agents.predator import Predator, PredatorMemory, exposure_direction
 from tfs.agents.public_news import PublicNewsTrader
 from tfs.agents.slicing import make_slice_rule
 from tfs.agents.trend import TrendFollower
@@ -104,18 +104,22 @@ def build_agents(
                 )
             )
 
+    depeg = cfg.market.depeg
     for venue, nc in ((Venue.MAIN, a.noise_main), (Venue.REF, a.noise_ref)):
         for j in range(nc.count):
-            agents.append(
-                NoiseTrader(
-                    agent_id=f"noise_{venue.value}_{j}",
-                    venue=venue,
-                    rate=nc.rate,
-                    mean_size=nc.mean_size,
-                    bankroll=nc.bankroll,
-                    rng=rngs.stream(f"noise_{venue.value}", market, j),
-                )
+            trader = NoiseTrader(
+                agent_id=f"noise_{venue.value}_{j}",
+                venue=venue,
+                rate=nc.rate,
+                mean_size=nc.mean_size,
+                bankroll=nc.bankroll,
+                rng=rngs.stream(f"noise_{venue.value}", market, j),
             )
+            # Depeg (S-D): each main-market noise trader sits the window out with the scenario's probability.
+            if venue is Venue.MAIN and depeg.discount > 0:
+                if rngs.stream("depeg_withdraw", market, j).random() < depeg.noise_withdrawal:
+                    trader.away = range(depeg.start, depeg.end)
+            agents.append(trader)
 
     for j in range(a.arbitrageurs.count):
         ac = a.arbitrageurs
@@ -190,6 +194,14 @@ class MarketRecord:
     exec_delay: float  # mean ticks from commitment to clearing over filled sealed orders (0 if continuous)
     unrevealed: int  # sealed commitments never revealed (escrow slashed)
     slashed: float  # escrow forfeited (unrevealed or insolvent commitments)
+    # Per-tick main-market activity (shock stability analysis, D-053)
+    flow_main: dict[str, np.ndarray]  # by agent kind: executed net YES exposure (shares) per tick
+    volume_main: dict[str, np.ndarray]  # by agent kind: executed shares per tick
+    active_main: np.ndarray  # distinct agents with an executed main-market trade, per tick
+    trades_main: np.ndarray  # executed main-market trades per tick
+    reverts_main: np.ndarray  # reverted main-market trades per tick
+    shock_false: tuple[bool, ...]  # was each shock false news?
+    correction_ticks: tuple[int, ...]  # when each shock's status was published
 
     def forecaster_pnl(self) -> dict[int, float]:
         """Gross trading PnL of each researching forecaster, by forecaster index."""
@@ -214,6 +226,41 @@ class BlockTrace:
     receipts: list[Receipt]
     price_before: float
     price_after: float
+
+
+@dataclass
+class MainActivity:
+    """Per-tick main-market activity by agent kind (for the shock stability metrics, D-053)."""
+
+    ticks: int
+    kind_of: dict[str, str]
+    flow: dict[str, np.ndarray] = field(default_factory=dict)  # signed: + = more YES exposure
+    volume: dict[str, np.ndarray] = field(default_factory=dict)
+    active: np.ndarray = field(init=False)  # distinct agents with an executed trade
+    trades: np.ndarray = field(init=False)  # executed trades
+    reverts: np.ndarray = field(init=False)  # reverted trades
+
+    def __post_init__(self) -> None:
+        self.active = np.zeros(self.ticks)
+        self.trades = np.zeros(self.ticks)
+        self.reverts = np.zeros(self.ticks)
+
+    def record(self, tick: int, receipts: Sequence[Receipt]) -> None:
+        traders = set()
+        for r in receipts:
+            if r.trade.venue is not Venue.MAIN:
+                continue
+            if not r.ok:
+                self.reverts[tick] += 1
+                continue
+            kind = self.kind_of.get(r.trade.agent_id, "other")
+            for series in (self.flow, self.volume):
+                series.setdefault(kind, np.zeros(self.ticks))
+            self.flow[kind][tick] += exposure_direction(r.trade) * abs(r.trade.shares)
+            self.volume[kind][tick] += abs(r.trade.shares)
+            self.trades[tick] += 1
+            traders.add(r.trade.agent_id)
+        self.active[tick] = len(traders)
 
 
 def _receipts_by_trade(txs: Sequence[Tx], receipts: Sequence[Receipt]) -> dict[int, Receipt]:
@@ -259,6 +306,7 @@ def run_market(
     reverts: dict[str, int] = defaultdict(int)
     requested: dict[str, float] = defaultdict(float)
     filled: dict[str, float] = defaultdict(float)
+    activity = MainActivity(ticks, kind_of)
     desk = None
     if policy.batched:
         desk = BatchDesk(
@@ -278,6 +326,8 @@ def run_market(
                 pending_receipts[receipt.trade.agent_id].append(receipt)
         prices = engine.prices()
         balances = engine.balances()
+        depeg = cfg.market.depeg
+        collateral_value = 1.0 - depeg.discount if depeg.start <= tick < depeg.end else 1.0
 
         def observation(agent: Agent, visible: tuple[PendingTx, ...] = (), commits: tuple = ()) -> Observation:
             private = 0.0 if agent.private_source is None else float(own_private_llr[agent.private_source, tick])
@@ -291,6 +341,7 @@ def run_market(
                 mempool=visible,
                 last_block=last_block,
                 commits=commits,
+                main_collateral=collateral_value,
             )
 
         # 1-2. Traders act; their transactions enter the mempool with arrival times.
@@ -327,6 +378,7 @@ def run_market(
         # 4-5. The builder orders the block; the engine executes it.
         plan = builder.order(pending, requests, late)
         receipts = engine.build_block(plan.txs)
+        activity.record(tick, tuple(batch_receipts) + tuple(receipts))
         for receipt in receipts:
             pending_receipts[receipt.trade.agent_id].append(receipt)
             executed += receipt.ok
@@ -382,6 +434,13 @@ def run_market(
         exec_delay=desk.stats.delay_sum / desk.stats.delay_count if desk and desk.stats.delay_count else 0.0,
         unrevealed=desk.stats.unrevealed if desk else 0,
         slashed=final[SLASHED_ID].cash,
+        flow_main=dict(activity.flow),
+        volume_main=dict(activity.volume),
+        active_main=activity.active,
+        trades_main=activity.trades,
+        reverts_main=activity.reverts,
+        shock_false=tape.shock_false,
+        correction_ticks=tape.correction_ticks,
     )
 
 

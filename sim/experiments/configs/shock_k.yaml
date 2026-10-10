@@ -1,0 +1,13 @@
+# S-K (descriptive; SPEC §5.1, DECISIONS D-053): the true-news shock of S-T (1 nat) under each mempool
+# policy: how batching (K = 5) delays the reaction to breaking news. Trend followers on (base).
+extends: base.yaml
+name: shock_k
+information:
+  q_false: 0.2
+  shocks:
+    - {tick: 100, nats: 1.0, status: "true"}
+analysis:
+  events: [shock, correction]
+sweep:
+  crossed:
+    mempool.policy: [public, commit_reveal, zk_batch]
