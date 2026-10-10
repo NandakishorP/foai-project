@@ -574,11 +574,24 @@ After resolution: payouts per account (|Δ| ≤ 1e-4) and market-maker PnL per v
 
 ---
 
+## D-045 — Owner decisions after Phase 2b; Phase 3 split; review date
+**Date:** 2026-10-10
+
+1. **Reversion correction accepted:** r = 1 is the pessimistic assumption about the predator. The disclosure wording for H2 is fixed in DISCLOSURES.md. **Phase 4 note:** add predator variants r ∈ {0, 0.5, 1} to the E7 tournament, to see which survives in equilibrium.
+2. **Boundary cases** are reported as a count against total trades: 7 of 2,476 (0.28%). **The Phase 2b gas figures are the baseline** for Phase 3's verification-gas comparison (`docs/report/phase2b/gas_report.txt`: LMSR buy ~158k, sell ~128k, router execute ~88k, arbitrage bundle ~456k).
+3. **Phase 3 is split.**
+   - **3a:** SealedBatchAuction + Noir `sealed_order` circuit + COMMIT_REVEAL / ZK_BATCH policies + E3 (2×2 {predators 0/1} × {PUBLIC, ZK_BATCH}) + defense costs (batch interval K sweep, fill rate, non-reveal, proving time, verification gas).
+   - **3b:** order-splitting expectiminimax (E4), whale (E5), oracle game (E6), shock scenarios.
+4. **H3 is pre-registered before any 3a run.** Claude proposes thresholds, the owner ratifies. Components: H3a residual leakage against a metadata copy-trading predator; H3b anti-crowding with 0 predators; H3c cost as a function of K; plus the 2×2 interaction (anti-predator vs anti-crowding share of the benefit).
+5. **Review planned for 31 October 2026.** Scope risk is tracked in each phase summary.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.
 - **Q2 — RESOLVED 2026-10-10 by D-032** (binding pre-registration; three Claude-chosen details flagged).
-- **Q3 — Review date.** Not yet supplied (placeholder text received twice).
+- **Q3 — RESOLVED 2026-10-10:** review planned for 31 October 2026 (D-045).
 - **Q4 — RESOLVED 2026-10-10 by D-031 (project-local install).** Global install: `forge Version: 1.3.5-foundry-zksync-v0.1.7` (checked 2026-10-10). Option: `FOUNDRY_DIR=~/.foundry-stable foundryup` installs stable binaries to a separate directory (foundryup reads `FOUNDRY_DIR`), used by this project via a Makefile/env var. Alternatively keep using foundry-zksync's forge, which compiles standard EVM by default. Decide before Phase 2b.
 - **Q5 — RESOLVED 2026-10-10 by D-024 (correlated signals) and D-026 (baseline calibration).** Original question: Private-information aggregation (F-001). The market as specified prices little private information. Options: keep it and report it; change how agents read the price; or change the information structure (e.g. Grossman–Stiglitz-style shared research signal). Owner decision needed before Phase 2a, because H2's mechanism depends on it.
 - **Q6 — RESOLVED 2026-10-10 by D-029** (add informed capital to the calibration; fallback rule).

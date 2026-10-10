@@ -20,7 +20,7 @@ Source: D-032; ratification D-037. Committed before any E2 run (`b803d95`, amend
 The D-043 tolerances were stated before the test existed. After the first run (D-043 amendment):
 1. The MM-PnL tolerance became n_trades × 1e-6, derived from per-trade rounding in the market maker's favour. The original fixed 1e-4 was mis-specified.
 2. Both engines receive the same 6-decimal-quantized orders.
-3. Trades whose average price is within 1e-6 of their limit have their fill/revert decision pinned to FastEngine's and are listed (7 in the predator market). Predators deliberately push victims onto their limits, below the chain's one-unit resolution.
+3. Trades whose average price is within 1e-6 of their limit have their fill/revert decision pinned to FastEngine's and are listed. Predators deliberately push victims onto their limits, below the chain's one-unit resolution. **Count: 7 of 2,476 trades (0.28%) across the three scenarios.** Per scenario: 0 of 224 (fuzz), 7 of 1,264 (predator market), 0 of 988 (no-predator market).
 
 Every other comparison stays at full strictness, and any fill/revert disagreement away from a limit fails the test.
 
@@ -33,7 +33,11 @@ Every other comparison stays at full strictness, and any fill/revert disagreemen
 - Identical predators bid identically, so the same one always wins the slot; several predators of the same type therefore behave much like one.
 
 ## Sensitivity of the H2 verdict (must appear next to the verdict in the report)
-H2 was **contradicted** at the pre-registered reference predator (r = 1): participation gap 6.0 pp [4.5, 7.6], Δ truth lost +11% [+6, +17]. In exploratory X-1, a more aggressive but still profitable predator (r = 0.5) gives 10.4 pp [8.8, 12.1] and +18% [+14, +24]. The same rule would read that as **partly supported**. Neither setting comes near "supported" (≥ 25 pp and > +30%). The verdict stands as pre-registered; its sensitivity to predator aggressiveness is a limitation (D-040).
+**H2 is contradicted under the pre-registered predator.** That predator assumes other traders undo its own price impact before it exits (`own_impact_reversion` r = 1), which is the pessimistic assumption for the predator (D-037). It gives participation gap 6.0 pp [4.5, 7.6] and Δ truth lost +11% [+6, +17].
+
+**Under r = 0.5, a viable and more aggressive predator, the same rule gives "partly supported"**: 10.4 pp [8.8, 12.1] and +18% [+14, +24] (exploratory X-1). **The verdict is sensitive to predator aggressiveness.** Neither setting comes near "supported" (≥ 25 pp and > +30%). An r = 0 predator is not viable: it loses about 178 per market.
+
+Follow-up (Phase 4): predator variants r ∈ {0, 0.5, 1} enter the E7 tournament, to see which survives in equilibrium (D-045).
 
 ## Exploratory analyses
 Everything under `docs/report/exploratory/` is exploratory. It was not pre-registered and never alters a verdict.
