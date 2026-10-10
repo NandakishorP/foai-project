@@ -13,6 +13,11 @@ remappings = [
     "@prb/math/=lib/prb-math/",
     "poseidon2-evm/=lib/poseidon2-evm/src/",
 ]
+# The bb-generated verifier is 24,643 bytes at runs = 200, over the EIP-170 limit of 24,576.
+# Compiled alone with optimizer_runs = 1 it is 23,723 bytes, so it deploys without Anvil's
+# disabled size limit. via_ir fails on it (stack too deep). See DECISIONS D-052.
+additional_compiler_profiles = [{ name = "small", optimizer_runs = 1 }]
+compilation_restrictions = [{ paths = "src/SealedOrderVerifier.sol", optimizer_runs = 1 }]
 
 [invariant]
 runs = 64

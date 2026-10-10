@@ -747,6 +747,37 @@ H3c contradicted on its "compounds beyond 3K" branch. ΔT is not monotone in K. 
 
 ---
 
+## D-052 — Owner decisions after Phase 3a; verifier fits EIP-170
+**Date:** 2026-10-10 · Owner.
+1. **The H3 verdicts stand exactly as pre-registered** (D-051), with the disclosures as written.
+2. **Exploratory X-4** (cannot change verdicts): one mechanism-side variant, *limit-respecting marginal clearing*.
+   - The net imbalance trades through the LMSR only until the marginal price reaches the marginal order's limit.
+   - Every fill is at that post-clearing marginal price.
+   - The LMSR keeps the marginal-minus-average surplus, which is reported.
+   - Runs: the 2×2 at K = 5, 200 paired seeds. Reported: accuracy, fills, predator take.
+   - Scheduled after E4 and the shock scenarios.
+3. **Proving delay in the report.** The measured proving time (0.28 s) is far below a block. The report presents commit-reveal (0 delay) as the realistic ZK outcome, alongside the pre-registered conservative 1-tick verdict. No new run.
+4. **Verifier size.**
+   - `optimizer_runs = 1` (`compilation_restrictions` in `contracts/foundry.toml`), applied to `SealedOrderVerifier.sol` only, gives **23,723 bytes**: 853 under EIP-170. `via_ir` fails on it (stack too deep).
+   - Anvil no longer runs with `--disable-code-size-limit`; every contract now deploys under the real limit.
+   - Cost: verification gas rises from about 2.81M to **2.84M** (+1%).
+   - Per-batch proof aggregation (one recursive proof per batch) is noted as future work for the verification gas.
+   - Note: when the compiler profile changes, `forge clean` is needed, otherwise stale flat artifacts are loaded.
+5. **Remaining scope, in priority order:**
+   1. E4 expectiminimax;
+   2. shock scenarios (required by Topic 6: the stability analysis must show trend followers and arbitrageurs reacting);
+   3. X-4;
+   4. minimal dashboard and the report (drafting starts now, one section per phase);
+   5. E5 whale (small);
+   6. E6 oracle, only if time allows;
+   7. Polymarket single calibration scenario;
+   8. E7 tournament with predator r-variants (optional).
+
+   All stretch goals are dropped.
+6. **Phase 3b starts in plan mode**, with E4 and the shock scenarios first. E4 is pre-registered before it runs.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

@@ -101,7 +101,6 @@ class AnvilProcess:
             "--gas-price", "0",
             "--base-fee", "0",
             "--gas-limit", "1000000000",  # room for a whole simulated block of trades
-            "--disable-code-size-limit",  # the bb UltraHonk verifier is 67 bytes over EIP-170 (D-048)
             "--silent",
         ]
         self.process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
