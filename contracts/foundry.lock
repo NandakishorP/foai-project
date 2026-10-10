@@ -11,6 +11,12 @@
       "rev": "69c8def5f222ff96f2b5beff05dfba996368aa79"
     }
   },
+  "lib/poseidon2-evm": {
+    "tag": {
+      "name": "v2.0.0",
+      "rev": "6f697224582e968f5414b70c0b50a51354466bce"
+    }
+  },
   "lib/prb-math": {
     "tag": {
       "name": "v4.1.0",

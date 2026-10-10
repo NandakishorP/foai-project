@@ -1,0 +1,7 @@
+[package]
+name = "sealed_order"
+type = "bin"
+authors = ["Truth for Sale"]
+
+[dependencies]
+order_lib = { path = "../order_lib" }

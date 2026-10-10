@@ -135,7 +135,8 @@ mempool:
   # Sealed-batch settings (used only by commit_reveal / zk_batch; D-046):
   batch_interval: 5       # K = 5 blocks ~ one minute of 12-second blocks (E3 reference); swept {1,2,5,10,20}
   escrow_tiers: [5.0, 25.0, 125.0, 625.0]  # x5 steps: escrow shows only a coarse size bucket
-  proving_delay: 0        # PLACEHOLDER: set from the bb proving benchmark before any E3 run (D-046 point 7)
+  proving_delay: 1        # D-046 rule ceil(prove time / 12 s block): median 0.28 s -> 1 tick (D-048).
+                          #   Conservative against ZK: a 0.28 s proof fits inside one block in reality.
   sender_visible: true    # commits come from the trader's own address (reference); false = relayer variant
 
 metrics:

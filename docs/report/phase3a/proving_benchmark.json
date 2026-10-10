@@ -1,0 +1,13 @@
+{
+  "n": 20,
+  "median_s": 0.281226687511662,
+  "p95_s": 0.2860298329615034,
+  "min_s": 0.27850974997272715,
+  "max_s": 0.2901119589805603,
+  "machine": "Apple M4 Pro",
+  "threads": 14,
+  "tools": "nargo 1.0.0-beta.16, bb v2.1.8 (UltraHonk, keccak transcript)",
+  "block_time_s": 12,
+  "proving_delay_ticks_rule": "ceil(median / block_time) (D-046 point 7)",
+  "proving_delay_ticks": 1
+}

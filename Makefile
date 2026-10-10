@@ -7,7 +7,7 @@ ANVIL := $(FOUNDRY_BIN)/anvil
 CAST  := $(FOUNDRY_BIN)/cast
 PY    := .venv/bin/python
 
-.PHONY: help foundry foundry-version test e1 season contracts contract-test difftest
+.PHONY: help foundry foundry-version test e1 season contracts contract-test difftest circuit-test
 
 help:
 	@echo "make foundry          install stable Foundry into .tools/foundry (project-local)"
@@ -42,3 +42,6 @@ contract-test:
 
 difftest:
 	$(PY) -c "from pathlib import Path; from tfs.engines.differential import run_scenarios; [print(r.summary()) for r in run_scenarios(Path('results/difftest'))]"
+
+circuit-test:
+	cd circuits/sealed_order && nargo test

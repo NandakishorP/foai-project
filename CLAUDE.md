@@ -44,7 +44,7 @@ An adversarial multi-agent simulation of an on-chain prediction market. Informed
 - Contract tests: `make contract-test` (forge unit + invariant tests, project-local Foundry)
 - FastEngine vs EvmEngine: `make difftest` (slow scenarios; the fast fuzz scenario runs in `pytest -q`)
 - On-chain replay: `.venv/bin/python -m tfs replay sim/experiments/configs/e2a.yaml --seed 3 --market 15 --engine evm`
-- Circuit tests: `cd circuits/sealed_order && nargo test`
+- Circuit tests: `make circuit-test` (`cd circuits/sealed_order && nargo test`; shared hashes in `circuits/order_lib`)
 - Dashboard: `streamlit run dashboard/app.py`
 
 ## Non-goals

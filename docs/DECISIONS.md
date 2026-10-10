@@ -632,6 +632,22 @@ After resolution: payouts per account (|Δ| ≤ 1e-4) and market-maker PnL per v
 
 ---
 
+## D-048 — ZK toolchain, circuit, proving benchmark and verifier (Phase 3a step 4)
+**Date:** 2026-10-10
+
+- **Toolchain:** the global nargo 1.0.0-beta.16 and bb v2.1.8 are compatible (compile → witness → UltraHonk proof → verify checked), so no project-local install is needed. Neither global install was modified.
+- **Poseidon2:** in this Noir version Poseidon2 is private in the standard library, so the circuit uses the external crate `noir-lang/poseidon` v0.1.1. On-chain, `zemse/poseidon2-evm` v2.0.0 (forge submodule) **matches Noir exactly** on test vectors for 1, 2 and 5 inputs (`test/Poseidon2Compat.t.sol`), so the keccak fallback is not needed.
+- **Circuit** `circuits/sealed_order` (SPEC §5 + D-002): well-formed order; solvency (limit·size ≤ escrow); commitment = Poseidon2(side, limit, size, salt, secret); Merkle membership (depth 8) of Poseidon2(secret); nullifier = Poseidon2(secret, batch_id).
+  - Units: limit in millionths, sizes and escrow in 6-decimal units.
+  - The limit is a price for the side bought, so the worst case is limit·size for both sides. That is equivalent to SPEC's YES-price form.
+  - 10 `nargo test`s: 2 valid, 8 invalid, each failing with its own reason.
+  - Shared hashes live in `circuits/order_lib`. The helper circuit `order_hasher` computes public inputs for Python with the same code, so Python never re-implements Poseidon2.
+- **Proving benchmark** (20 proofs, Apple M4 Pro, 14 threads): median **0.28 s**, p95 0.29 s (witness + UltraHonk proof, keccak transcript). The D-046 rule ceil(0.28 / 12) gives **proving_delay = 1 tick** in `base.yaml`. That is conservative against ZK: a 0.28 s proof fits inside one block, so the realistic delay is 0. The rule was fixed in advance and is kept; the conservatism is disclosed.
+- **Verifier** (bb `write_solidity_verifier`): accepts the real proof and rejects a wrong escrow or batch id. Verification gas ≈ **2.81M** (vs Phase 2b LMSR buy ~158k: about 18×). The verifier's runtime code is **24,643 bytes, 67 over the EIP-170 limit** at optimizer runs 200, so it is not deployable on Ethereum as generated. Anvil runs with `--disable-code-size-limit`; this deployability cost is reported.
+- **Solidity 0.8.26 → 0.8.27** for all contracts (the generated verifier requires ≥ 0.8.27; patch release, same semantics). All 39 Foundry tests pass after the bump.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

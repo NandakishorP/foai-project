@@ -1,0 +1,7 @@
+[package]
+name = "order_hasher"
+type = "bin"
+authors = ["Truth for Sale"]
+
+[dependencies]
+order_lib = { path = "../order_lib" }
