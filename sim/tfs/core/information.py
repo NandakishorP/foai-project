@@ -6,6 +6,19 @@ Gaussian signals centred on +mu if Y=1 and −mu if Y=0.
 Public news and shocks are independent signals s ~ N(±mu, sigma²). A Bayesian
 adds each one's log-likelihood ratio LLR(s) = 2·mu·s / sigma² to its log-odds.
 
+**False breaking news** (Q1, DECISIONS D-053). A shock is false with a probability
+q_false that everyone knows. A false shock's signal points the wrong way:
+s ~ N(∓mu, sigma²). A Bayesian who cannot yet tell true from false uses the mixture
+
+    LLR_mix(s) = log[(1−q)·e^L + q] − log[(1−q) + q·e^L],   L = 2·mu·s / sigma².
+
+It discounts a shock, never reverses it. `correction_delay` ticks later the shock's
+status is published. From then on the exact LLR applies: +L if it was true, −L if it
+was false. So the tape adds (exact − LLR_mix) at the correction tick. Both ideal
+prices use the same tape, so they remain exact posteriors, and the decomposition (D-001)
+still holds when shocks are drawn with probability q_false. Scenarios that *force* a
+shock to be false condition on a rare event, so the decomposition is not claimed for them.
+
 Research signals are correlated across forecasters (DECISIONS D-024). At each
 research event, every potential forecaster i receives
 
@@ -54,6 +67,14 @@ from tfs.core.rng import RngFactory
 
 def logit(p: float) -> float:
     return math.log(p / (1.0 - p))
+
+
+def mixture_llr(llr: float, q_false: float) -> float:
+    """LLR of a shock that is false (points the wrong way) with probability q_false; see the module docstring."""
+    if q_false == 0.0:
+        return llr  # exactly the ordinary LLR: no floating-point change to earlier results
+    keep, flip = math.log1p(-q_false), math.log(q_false)
+    return float(np.logaddexp(keep + llr, flip) - np.logaddexp(keep, flip + llr))
 
 
 def signal_llr(s: np.ndarray | float, mu: float, sigma: float) -> np.ndarray | float:
@@ -149,6 +170,8 @@ class SignalTape:
     private_values_seen: np.ndarray  # same signals by the tick each forecaster receives them (= emission if no delay)
     noise: ResearchNoise
     shock_ticks: tuple[int, ...]
+    shock_false: tuple[bool, ...] = ()  # was each shock false news?
+    correction_ticks: tuple[int, ...] = ()  # when each shock's status was published (empty if q_false = 0)
 
     @property
     def ticks(self) -> int:
@@ -228,10 +251,19 @@ def generate_tape(cfg: SimConfig, rngs: RngFactory, market: int) -> SignalTape:
     public_sigma = sigma_for_nats(info.public.expected_nats * info.precision_scale, info.public.rate * ticks, info.mu)
     public_llr = _poisson_signals_llr(rngs.stream("public_news", market), info.public.rate, ticks, sign, info.mu, public_sigma)
 
+    shock_false, corrections = [], []
     for k, shock in enumerate(info.shocks):
         shock_sigma = sigma_for_nats(shock.nats * info.precision_scale, 1.0, info.mu)
-        value = sign * info.mu + shock_sigma * rngs.stream("shock", market, k).standard_normal()
-        public_llr[shock.tick] += signal_llr(value, info.mu, shock_sigma)
+        false = _shock_is_false(shock.status, info.q_false, rngs, market, k)
+        direction = -sign if false else sign
+        value = direction * info.mu + shock_sigma * rngs.stream("shock", market, k).standard_normal()
+        llr = float(signal_llr(value, info.mu, shock_sigma))
+        public_llr[shock.tick] += mixture_llr(llr, info.q_false)
+        if info.q_false > 0:  # the correction turns the mixture LLR into the exact one
+            exact = -llr if false else llr
+            public_llr[shock.tick + info.correction_delay] += exact - mixture_llr(llr, info.q_false)
+            corrections.append(shock.tick + info.correction_delay)
+        shock_false.append(false)
 
     noise = research_noise(cfg)
     private_values, private_values_seen = _research_values(cfg, rngs, market, sign, noise)
@@ -243,7 +275,16 @@ def generate_tape(cfg: SimConfig, rngs: RngFactory, market: int) -> SignalTape:
         private_values_seen=private_values_seen,
         noise=noise,
         shock_ticks=tuple(s.tick for s in info.shocks),
+        shock_false=tuple(shock_false),
+        correction_ticks=tuple(corrections),
     )
+
+
+def _shock_is_false(status: str, q_false: float, rngs: RngFactory, market: int, k: int) -> bool:
+    """A forced status, or a draw with probability q_false from the shock's own stream."""
+    if status != "drawn":
+        return status == "false"
+    return q_false > 0 and bool(rngs.stream("shock_false", market, k).random() < q_false)
 
 
 def ideal_logodds(tape: SignalTape, researchers: Collection[int]) -> np.ndarray:

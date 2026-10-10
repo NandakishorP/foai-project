@@ -19,7 +19,11 @@ class NoiseTrader(Agent):
       hedging or entertainment); their losses are reported.
     - Environment: one LMSR venue.
     - Actuators: market buy orders of YES or NO.
-    - Sensors: none used (they ignore prices and news).
+    - Sensors: none used (they ignore prices and news), except the clock: in a depeg
+      scenario a withdrawn noise trader sits out the window (`away`).
+
+    While away it still draws its random numbers and throws the orders away, so its
+    stream after the window is the same as in the run without a depeg (paired design).
     """
 
     kind = "noise"
@@ -32,9 +36,11 @@ class NoiseTrader(Agent):
         self.rate = rate
         self.mean_size = mean_size
         self.rng = rng
+        self.away: range = range(0)  # ticks it sits out (depeg withdrawal)
+        self._tick = 0
 
     def perceive(self, obs: Observation) -> None:
-        pass
+        self._tick = obs.tick
 
     def act(self) -> list[Tx]:
         orders: list[Tx] = []
@@ -42,4 +48,4 @@ class NoiseTrader(Agent):
             side = Side.YES if self.rng.random() < 0.5 else Side.NO
             size = float(self.rng.exponential(self.mean_size))
             orders.append(Trade(self.agent_id, self.venue, side, size, limit_price=1.0))
-        return orders
+        return [] if self._tick in self.away else orders

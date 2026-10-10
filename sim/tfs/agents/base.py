@@ -28,6 +28,7 @@ class Observation:
     mempool: tuple[PendingTx, ...] = ()  # pending transactions this agent can read (predators only)
     last_block: tuple[Receipt, ...] = ()  # every receipt of the previous block, in execution order (public chain data)
     commits: tuple[Any, ...] = ()  # sealed batches: metadata (CommitMeta) of the open batch's commitments
+    main_collateral: float = 1.0  # dollar value of one unit of the main market's collateral (< 1 in a depeg)
 
 
 class Agent(ABC):

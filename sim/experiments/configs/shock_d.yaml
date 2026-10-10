@@ -1,0 +1,18 @@
+# S-D (descriptive; DECISIONS D-053): the main market's USDC trades at 0.90 dollars for ticks 100-129.
+# The reference venue settles in an unaffected unit. No news shock, so the depeg is the only event.
+# Noise-trader withdrawal is a scenario input {0, 0.5, 1}; discount 0 is the no-depeg control.
+extends: base.yaml
+name: shock_d
+information:
+  shocks: []
+market:
+  depeg:
+    discount: 0.10
+analysis:
+  events: [depeg]
+sweep:
+  crossed:
+    agents.trend.count: [0, 2]
+  one_at_a_time:
+    market.depeg.noise_withdrawal: [0.5, 1.0]
+    market.depeg.discount: [0.0]

@@ -1,0 +1,19 @@
+# S-F (descriptive; DECISIONS D-053): FALSE breaking news at tick 100 (points the wrong way),
+# corrected 20 ticks later. q_false = 0.2 (sensitivity 0.1 and 0.4). The forced-false scenario
+# conditions on a rare event, so the truth-lost decomposition is not claimed here.
+extends: base.yaml
+name: shock_f
+information:
+  q_false: 0.2
+  shocks:
+    - {tick: 100, nats: 1.0, status: "false"}
+analysis:
+  events: [shock, correction]
+sweep:
+  crossed:
+    information.shocks:
+      - [{tick: 100, nats: 1.0, status: "false"}]
+      - [{tick: 100, nats: 3.0, status: "false"}]
+    agents.trend.count: [0, 2]
+  one_at_a_time:
+    information.q_false: [0.1, 0.4]

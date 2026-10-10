@@ -29,6 +29,7 @@ import yaml
 BeliefModel = Literal["own_signals", "price_anchored"]
 ResearchMode = Literal["always", "endogenous"]
 SliceRule = Literal["capped", "naive", "twap", "random", "expectiminimax"]
+ShockStatus = Literal["drawn", "true", "false"]
 
 
 # --------------------------------------------------------------------------- #
@@ -48,11 +49,22 @@ class SeasonConfig:
 
 
 @dataclass(frozen=True)
+class DepegConfig:
+    """Collateral depeg scenario (DECISIONS D-053): the main market's USDC is worth 1 − discount dollars."""
+
+    start: int  # first tick of the depeg window
+    end: int  # first tick after it
+    discount: float  # δ: dollars lost per USDC during the window (0 = no depeg)
+    noise_withdrawal: float  # chance that each main-market noise trader sits the window out (a scenario input)
+
+
+@dataclass(frozen=True)
 class MarketConfig:
     ticks: int  # blocks per market
     prior: float  # prior P(Y=1)
     b_main: float  # LMSR liquidity of the main market
     b_ref: float  # LMSR liquidity of the reference venue
+    depeg: DepegConfig
 
 
 @dataclass(frozen=True)
@@ -72,7 +84,8 @@ class PrivateSignalConfig:
 @dataclass(frozen=True)
 class ShockConfig:
     tick: int  # when the breaking news arrives
-    nats: float  # expected log-likelihood ratio of the shock signal
+    nats: float  # expected log-likelihood ratio of the shock signal (if it is true)
+    status: ShockStatus  # "drawn": false with probability q_false; "true"/"false": fixed by the scenario
 
 
 @dataclass(frozen=True)
@@ -82,6 +95,8 @@ class InformationConfig:
     public: PublicNewsConfig
     private: PrivateSignalConfig
     shocks: tuple[ShockConfig, ...]
+    q_false: float  # probability that a shock is false news; everyone (and the ideal prices) knows it
+    correction_delay: int  # ticks after a shock until its true/false status is published (used if q_false > 0)
 
 
 @dataclass(frozen=True)
@@ -239,9 +254,21 @@ def _validate(cfg: SimConfig) -> None:
         raise ConfigError("agents.forecasters.research.cost_median is required when mode is 'endogenous'")
     if not 0.0 < cfg.market.prior < 1.0:
         raise ConfigError("market.prior must be in (0, 1)")
-    for shock in cfg.information.shocks:
+    info = cfg.information
+    if not 0.0 <= info.q_false < 1.0:
+        raise ConfigError("information.q_false must be in [0, 1)")
+    for shock in info.shocks:
         if not 0 <= shock.tick < cfg.market.ticks:
             raise ConfigError(f"shock tick {shock.tick} is outside the market")
+        if info.q_false > 0 and shock.tick + info.correction_delay >= cfg.market.ticks:
+            raise ConfigError(f"the correction of the shock at tick {shock.tick} falls outside the market")
+        if shock.status == "false" and info.q_false == 0:
+            raise ConfigError("a forced-false shock needs q_false > 0: with q_false = 0 nobody could doubt it")
+    depeg = cfg.market.depeg
+    if depeg.discount > 0 and not 0 <= depeg.start < depeg.end <= cfg.market.ticks:
+        raise ConfigError("market.depeg window must lie inside the market")
+    if not 0.0 <= depeg.discount < 1.0 or not 0.0 <= depeg.noise_withdrawal <= 1.0:
+        raise ConfigError("market.depeg discount must be in [0, 1) and noise_withdrawal in [0, 1]")
     if cfg.mempool.batch_interval < 1:
         raise ConfigError("mempool.batch_interval must be at least 1")
     if list(cfg.mempool.escrow_tiers) != sorted(cfg.mempool.escrow_tiers) or not cfg.mempool.escrow_tiers:
