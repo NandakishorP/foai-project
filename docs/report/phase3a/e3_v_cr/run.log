@@ -1,0 +1,10 @@
+wrote results/e3_v_cr
+wrote results/e3_v_cr/e3_v_cr_seasons.png
+{
+  "note": "descriptive variants (PREREGISTRATION H3, E3-V): commit-reveal attackers",
+  "windows": [
+    "6-30"
+  ],
+  "points": 0
+}
+exit 0

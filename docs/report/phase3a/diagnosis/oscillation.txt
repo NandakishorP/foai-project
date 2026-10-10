@@ -1,0 +1,39 @@
+Mean |main price - p*_full|, market 11, seeds 0-19, research forced, 0 predators:
+  public         0.022
+  private_relay  0.022
+  zk_batch K=1   0.071
+  zk_batch K=5   0.078
+
+One market (seed 3, market 8), zk_batch K=1. Sealed buys of NO are shown as their NO limit.
+tick 20  p_full 0.500  main 0.465
+tick 21  p_full 0.500  main 0.535
+tick 22  p_full 0.734  main 0.538
+tick 23  p_full 0.734  main 0.462
+tick 24  p_full 0.734  main 0.462
+tick 25  p_full 0.734  main 0.886
+tick 26  p_full 0.734  main 0.886
+tick 27  p_full 0.734  main 0.531
+tick 28  p_full 0.734  main 0.541
+tick 29  p_full 0.734  main 0.880
+tick 30  p_full 0.734  main 0.884
+tick 31  p_full 0.734  main 0.534
+tick 32  p_full 0.734  main 0.534
+tick 33  p_full 0.727  main 0.884
+tick 34  p_full 0.727  main 0.888
+tick 35  p_full 0.727  main 0.526
+clearing 20: forecaster yes<=0.734: 200, public yes<=0.734: 20, arb yes<=0.488: 5
+clearing 21: forecaster no<=0.266: 200, public no<=0.266: 20, noise yes<=0.999: 3, arb no<=0.16: 46, trend yes<=0.999: 4
+clearing 22: forecaster no<=0.266: 200, public no<=0.266: 20, arb no<=0.16: 46, trend yes<=0.999: 4
+clearing 23: forecaster yes<=0.734: 200, public yes<=0.734: 17, trend yes<=0.999: 4
+clearing 24: forecaster yes<=0.734: 200, public yes<=0.734: 17, trend yes<=0.999: 4
+clearing 25: forecaster no<=0.266: 200, public no<=0.266: 17, arb no<=0.163: 40, trend yes<=0.999: 4
+clearing 26: forecaster no<=0.266: 200, public no<=0.266: 17, noise no<=0.999: 4, arb no<=0.159: 41, trend yes<=0.999: 4
+clearing 27: forecaster yes<=0.734: 200, public yes<=0.734: 18, noise yes<=0.999: 3, trend yes<=0.999: 4
+clearing 28: forecaster yes<=0.734: 200, public yes<=0.734: 18, trend yes<=0.999: 4
+clearing 29: forecaster no<=0.273: 192, public no<=0.266: 17, arb no<=0.16: 42, trend yes<=0.999: 4
+clearing 30: forecaster no<=0.273: 192, public no<=0.266: 17, arb no<=0.156: 43, trend yes<=0.999: 4
+clearing 31: forecaster yes<=0.727: 200, public yes<=0.734: 12, noise yes<=0.999: 7, trend yes<=0.999: 4
+clearing 32: forecaster yes<=0.727: 200, public yes<=0.734: 11, noise yes<=0.999: 17, noise no<=0.999: 7
+clearing 33: forecaster no<=0.273: 156, public no<=0.266: 20, arb no<=0.17: 40, trend no<=0.999: 4
+clearing 34: forecaster no<=0.273: 156, public no<=0.266: 20, noise no<=0.999: 13, arb no<=0.159: 43, trend no<=0.999: 4
+clearing 35: forecaster yes<=0.727: 200, public yes<=0.734: 17

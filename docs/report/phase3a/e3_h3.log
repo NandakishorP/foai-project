@@ -1,0 +1,6 @@
+H3a: supported
+H3b: contradicted
+H3c: contradicted
+H3_overall: contradicted
+wrote results/e3/h3_verdicts.json
+exit 0

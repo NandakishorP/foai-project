@@ -689,6 +689,64 @@ After resolution: payouts per account (|Δ| ≤ 1e-4) and market-maker PnL per v
 
 ---
 
+## D-051 — E3 results: H3 verdicts as pre-registered (Phase 3a step 7)
+**Date:** 2026-10-10 · Configs committed before any run (`9e8f06f`). All five experiments and `python -m tfs h3` exited 0. Archived in `docs/report/phase3a/` (`h3_verdicts.json`, one folder per experiment; the large `runs.csv` files stay in `results/`).
+
+**Verdicts** (rules in PREREGISTRATION.md H3, computed by `tfs/experiments/h3.py`; joint paired bootstrap, 200 seeds, 10,000 resamples):
+
+| | Statistic, point [95% CI] | Verdict |
+|---|---|---|
+| **H3a** residual leakage | L_PUB 0.130 [0.123, 0.138]; L_ZK 0.004 [−0.008, 0.015]; **R 0.03 [−0.06, 0.12]** (≤ 0.5) | **supported** |
+| **H3b** anti-crowding | **P ratio 0.85 [0.83, 0.86]** (≤ 1.00); U_PUB − U_ZK −4.5 pp [−4.8, −4.3] | **contradicted** |
+| **H3c** cost vs K | **ΔT(5) 17.2 ticks [16.5, 17.9]** (> 3K = 15); ΔT(20) − ΔT(1) −13.4 [−14.4, −12.4] | **contradicted** |
+| **H3 overall** (E3-E) | **RMS truth change +43% [+36%, +51%]** (≥ 0); participation −2.9 pp [−4.8, −1.0] | **contradicted** |
+
+H3c contradicted on its "compounds beyond 3K" branch. ΔT is not monotone in K. K = 1 is worst: ΔT(1) = 36.4, ΔT(2) = 24.0, ΔT(5) = 17.2, ΔT(10) = 20.7, ΔT(20) = 23.0. The one-predator arm is the same within about 1.5 ticks.
+
+**2×2 decomposition (descriptive).** "Benefit" is the change from PUB to ZK.
+- E3-F truth MSE: total −0.0116 (ZK worse); anti-crowding −0.0119; anti-predator +0.0004.
+- E3-F researcher profit: anti-crowding −0.92 (batching itself lowers it); anti-predator +0.75 (sealing recovers the predator's take); net −0.16.
+- E3-E truth MSE: anti-crowding −0.0156; anti-predator +0.0028.
+- E3-E participation: batching lowers it by 8.6 pp without a predator; hiding recovers 5.6 pp of the predator's effect.
+- The share statistics are not meaningful when the total has the "wrong" sign; the components are reported instead.
+
+**Costs vs K** (E3-K, 0 predators; PUB reference fill 0.64, RMST 39.5):
+
+| K | 1 | 2 | 5 | 10 | 20 |
+|---|---|---|---|---|---|
+| fill rate | 0.44 | 0.48 | 0.54 | 0.60 | 0.68 |
+| exec delay (ticks) | 1.0 | 1.7 | 4.1 | 7.8 | 14.5 |
+| truth MSE (PUB 0.0013) | 0.008 | 0.008 | 0.013 | 0.023 | 0.040 |
+| RMST to ε | 75.8 | 63.4 | 56.6 | 60.1 | 62.5 |
+
+- Proving: median 0.28 s per order (Apple M4 Pro), giving a 1-tick delay under the D-046 rule.
+- Verification: about **2.81M gas** per sealed order. Phase 2b baselines: buy ~158k, sell ~128k, execute ~88k, bundle ~456k, so verification is about 18× a public buy.
+- A whole batch with one real proof, end to end: about 5.5M gas.
+
+**Variants (E3-V, E3-V-CR; descriptive):**
+- **PRIVATE_RELAY** (hidden, but continuous) keeps truth MSE at the public level (0.0013), and the predator earns nothing. The accuracy loss under ZK comes from *batching*, not from hiding.
+- **Relayer** (sender hidden): the metadata predator never trades, so this is identical to the 0-predator cell.
+- **COMMIT_REVEAL without attackers** is ZK_BATCH with proving delay 0.
+  - Researchers' unfilled share 0.28 vs ZK 0.57; researcher profit 5.62 vs 4.91.
+  - Same truth MSE (0.0133).
+  - The conservative 1-tick proving delay (D-048) is therefore responsible for most of ZK's fill cost, but not for its accuracy cost.
+- **Attackers:**
+  - The non-reveal griefer (40 unrevealed commits per market) and the spammer (commit-reveal only; impossible under ZK) each lose their whole 200 bankroll to slashing. Neither changes other agents' outcomes; only the aggregate fill rate falls, because their orders count as requested.
+  - The free-option pair (still possible under ZK, which proves validity, not reveal) loses about 330 per market and raises truth MSE slightly (0.0143 vs 0.0132).
+- **Predator r = 0.5 under ZK:** loses money (−1.7 per market).
+
+**Diagnosis of the accuracy result** (run after the verdicts; descriptive; `docs/report/phase3a/diagnosis/`):
+- Under sealed batches the main price **cycles around the researchers' shared belief instead of settling on it**. Tracking error |p − p*_full| is 0.071 (K = 1) and 0.078 (K = 5), vs 0.022 under PUBLIC and PRIVATE_RELAY.
+- Mechanism:
+  1. D-046 clears at the price where the LMSR's *average* price over the net imbalance equals p*. So the *marginal* price after clearing ends beyond every filled limit: about 0.88 for a shared belief of 0.73 from 0.53.
+  2. All researchers then sell back to an average of 0.73, leaving the marginal price near 0.53, and so on.
+  3. Identical researcher orders (ρ = 1) make the aggregate large. The proving delay sends two same-direction batches before anyone sees a clearing (K = 1).
+- This is the designed clearing rule working as specified, not an implementation error. The FastEngine/EVM differential and the property tests confirm the rule is implemented as written.
+- **The H3 accuracy and H3c verdicts are therefore conditional on average-price uniform clearing combined with agents that set their limit to their belief.** A clearing at the post-trade *marginal* price, or limit-aware order sizing, would be a different design. Neither is tried here: the verdicts stand as computed, and any such variant needs owner approval and would be exploratory.
+
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

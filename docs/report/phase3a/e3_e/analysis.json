@@ -1,0 +1,7 @@
+{
+  "note": "per-policy paired statistics; H3 verdicts come from `python -m tfs h3`",
+  "windows": [
+    "21-30"
+  ],
+  "points": 2
+}

@@ -1,0 +1,12 @@
+{
+  "git": {
+    "commit": "9e8f06fec631d4c509f75acfa8674d20f64445b7",
+    "dirty": false
+  },
+  "seeds": [
+    0,
+    199
+  ],
+  "n_points": 6,
+  "config": "sim/experiments/configs/e3_v_cr.yaml"
+}

@@ -1,0 +1,17 @@
+/Users/admin/Desktop/foai_project/sim/tfs/experiments/verdicts.py:52: RuntimeWarning: Mean of empty slice
+  return np.array([reduce([r[column] for r in run.rows if first <= r["market"] <= last]) for run in results])
+/Users/admin/Desktop/foai_project/sim/tfs/experiments/verdicts.py:83: RuntimeWarning: Mean of empty slice
+  row[f"{name}_per_market"] = float(np.nanmean(_per_seed(pred, window, name, "mean")))
+/Users/admin/Desktop/foai_project/sim/tfs/experiments/verdicts.py:84: RuntimeWarning: Mean of empty slice
+  row[f"{name}_per_market_base"] = float(np.nanmean(_per_seed(base, window, name, "mean")))
+wrote results/e3_v
+wrote results/e3_v/e3_v_sweeps.png
+wrote results/e3_v/e3_v_seasons.png
+{
+  "note": "descriptive variants (PREREGISTRATION H3, E3-V)",
+  "windows": [
+    "6-30"
+  ],
+  "points": 7
+}
+exit 0

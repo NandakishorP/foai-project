@@ -39,5 +39,19 @@ Every other comparison stays at full strictness, and any fill/revert disagreemen
 
 Follow-up (Phase 4): predator variants r ∈ {0, 0.5, 1} enter the E7 tournament, to see which survives in equilibrium (D-045).
 
+## Phase 3a (ZK sealed batches, E3) — must appear next to the H3 verdicts
+- **What the H3 verdicts depend on** (D-051).
+  - H3a is supported: sealing removes essentially all leakage, even against a metadata-reading predator.
+  - H3b, H3c and H3 overall are contradicted. Under the pre-registered clearing rule (D-046: uniform price = the LMSR's *average* price over the net imbalance), the main-market price cycles around the researchers' shared belief instead of settling, which makes accuracy and time-to-ε worse.
+  - These verdicts hold **for that clearing rule with agents that set their limit to their belief.** Other batch designs (clearing at the post-trade marginal price; limit-aware order sizing) were not tested.
+  - PRIVATE_RELAY, which hides orders without batching them, keeps public-level accuracy.
+- **Proving delay is conservative against ZK** (D-048).
+  - A proof takes 0.28 s, well inside a 12 s block, but the pre-fixed rule gives a 1-tick delay.
+  - Commit-reveal without attackers is the same mechanism with zero delay. It has researchers' unfilled share 0.28 vs 0.57 and profit 5.62 vs 4.91 per researcher-market, with the same truth MSE. So the delay drives most of ZK's fill cost and the H3b profit result, but not the accuracy result.
+- **Verifier size.** The bb-generated UltraHonk verifier is 24,643 bytes, 67 over the EIP-170 limit. Anvil runs with `--disable-code-size-limit`; a real deployment would have to split or optimise it. Verification costs about 2.81M gas per sealed order, about 18× a public buy (~158k).
+- **Metadata predator changed before any E3 run** (D-047). Its first version gated on P(informed) > 0.5 and never traded under batching, which would have made H3a trivially true. It was replaced by a per-address markout EMA before any E3 run.
+- **Batch differential tolerance** (D-043 amendment 4). Batch fill comparisons use an allowance derived from the price difference between engines, not a fixed number. Fill/no-fill disagreements still fail the test (there were none).
+- **Diagnosis run after the verdicts.** The oscillation analysis (`docs/report/phase3a/diagnosis/`) was done after seeing the results, to rule out a bug. It is descriptive and changes no verdict.
+
 ## Exploratory analyses
 Everything under `docs/report/exploratory/` is exploratory. It was not pre-registered and never alters a verdict.
