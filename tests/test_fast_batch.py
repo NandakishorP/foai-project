@@ -73,3 +73,18 @@ def test_pairs_are_merged_after_clearing() -> None:
     assert acct.position(Venue.MAIN, Side.YES) == pytest.approx(6.0)
     assert acct.position(Venue.MAIN, Side.NO) == pytest.approx(0.0)
     assert e.balances()[BUILDER_ID].cash == 0.0
+
+
+def test_marginal_clearing_conserves_money_and_the_lmsr_keeps_the_surplus() -> None:
+    """X-4 (EXPLORATORY): traders pay the post-trade marginal price; the excess stays with the LMSR."""
+    e = FastEngine(LIQ, {"a": 100.0, "b": 100.0, "c": 100.0}, batch_rule="marginal")
+    start = _total(e)
+    for agent in "abc":
+        e.commit(agent, 25.0)
+    orders = [(SealedOrder(i, agent, Side.YES, 20.0, 0.7), 25.0) for i, agent in enumerate("abc")]
+    e.clear_batch(orders, [])
+    assert e.batch_surplus > 0
+    assert e.state().venues[Venue.MAIN].collateral > 0
+    assert _total(e) == pytest.approx(start)
+    e.resolve(0)
+    assert _total(e) == pytest.approx(start)

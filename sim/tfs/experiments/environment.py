@@ -18,6 +18,11 @@ E4 runs, so no E4 outcome can influence the model. The measurement is determinis
   Without the "sent an order" condition the median is 0: most ticks with a gap are
   equilibrium ticks where every researcher has reached its Kelly target and nobody trades.
   That version is reported too (`kappa_all_gap_ticks`), but it answers a different question.
+- **The crowd** (EXPLORATORY X-5, D-057): in the same blocks, the share of forecaster 0's
+  gap that the *other forecasters* close *before* its own order executes (`crowd_ahead`,
+  five equally likely values: the 10th, 30th, 50th, 70th and 90th percentiles, clipped to
+  [0, 1]), and the median share everyone else closes in the rest of the block
+  (`kappa_rest`). The crowd-aware search uses these instead of κ alone.
 - **Predator beliefs** (used only if the owner chooses the measured-predator MIN model):
   the reference predator's P(informed) about forecasters at the end of a season, its
   E[drift | informed], and the share of forecaster orders that were front-run.
@@ -139,3 +144,52 @@ def measure_predator(cfg: SimConfig, seeds: range, first_market: int) -> Predato
 
 def as_dict(*measurements: object) -> dict:
     return {type(m).__name__: asdict(m) for m in measurements}  # type: ignore[call-overload]
+
+
+@dataclass(frozen=True)
+class CrowdMeasurement:
+    crowd_ahead: tuple[float, ...]  # equally likely shares of the gap the crowd closes before my order
+    kappa_rest: float  # median share everyone else closes in the rest of the block
+    n_ticks: int
+    seeds: int
+
+
+def _crowd_sample(block: BlockTrace, gap: float) -> tuple[float, float] | None:
+    """(share of the gap closed by other forecasters before forecaster 0's order, share closed by everyone else after)."""
+    receipts = list(block.receipts)
+    mine = [i for i, r in enumerate(receipts) if r.trade.agent_id == FORECASTER and r.trade.venue is Venue.MAIN]
+    if not mine:
+        return None
+    first = mine[0]
+    d = float(np.sign(gap))
+
+    def impact(r) -> float:
+        return logit(r.price_after) - logit(r.price_before) if r.ok and r.trade.venue is Venue.MAIN else 0.0
+
+    ahead = sum(impact(r) for r in receipts[:first] if r.trade.agent_id.startswith("forecaster_"))
+    total_others = logit(block.price_after) - logit(block.price_before) - _own_impact(block)
+    return d * ahead / abs(gap), d * (total_others - ahead) / abs(gap)
+
+
+def measure_crowd(cfg: SimConfig, seeds: range, first_market: int, min_gap: float = 0.1,
+                  news_window: int = 5) -> CrowdMeasurement:
+    """Same blocks as κ (forecaster 0 trading, gap ≥ min_gap, no recent news), split at forecaster 0's order."""
+    span = cfg.season.n_markets - first_market
+    ahead, rest = [], []
+    for seed in seeds:
+        market = first_market + seed % span
+        trace: list[BlockTrace] = []
+        run_season(cfg, seed, trace_market=market, trace=trace)
+        belief = forecaster_belief_path(cfg, seed, market)
+        news = generate_tape(cfg, RngFactory(seed), market).public_llr != 0.0
+        for block in trace:
+            t = block.tick
+            gap = belief[t] - logit(block.price_before)
+            if news[max(0, t - news_window):t + 1].any() or abs(gap) < min_gap or not _sent_order(block):
+                continue
+            sample = _crowd_sample(block, gap)
+            if sample is not None:
+                ahead.append(min(max(sample[0], 0.0), 1.0))
+                rest.append(sample[1])
+    quantiles = tuple(float(q) for q in np.quantile(ahead, [0.1, 0.3, 0.5, 0.7, 0.9]))
+    return CrowdMeasurement(quantiles, float(np.median(rest)), len(ahead), len(seeds))

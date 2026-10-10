@@ -27,6 +27,19 @@ crossing, found by walking the "price ladder" of order bounds:
   pro-rata (every order on that side gets the same fraction).
 Researchers who share one signal send identical limits. Under D-004's "drop all violated
 orders" they were all dropped together; here they share the fill pro-rata.
+
+**Two pricing rules** (`rule`):
+- `average` (D-046, the pre-registered E3 rule): the uniform price is the LMSR's
+  *average* price for the imbalance, so payments exactly cover the LMSR cost. After
+  clearing, the LMSR's *marginal* price lies beyond every filled limit, and researchers
+  with one shared belief then trade the price back and forth around it (D-051).
+- `marginal` (EXPLORATORY X-4, D-057): the uniform price is the LMSR's *marginal* price
+  *after* the imbalance is traded, so the market ends exactly at the clearing price and
+  never past a filled limit. Traders pay more per share than the LMSR's average cost; the
+  difference (marginal − average) × |D| is a surplus that the LMSR keeps (`surplus`).
+The ladder, the fixed point and the pro-rata margin are the same for both rules; only
+the price function of the imbalance changes. Both prices rise with D, so the crossing is
+still unique.
 """
 
 from __future__ import annotations
@@ -35,7 +48,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from tfs.core.types import Side
-from tfs.market.lmsr import cost, cost_at_price, price_yes
+from tfs.market.lmsr import cost, cost_at_price, price_yes, sigmoid
 
 BISECTION_STEPS = 200  # enough to pin D to float precision over any realistic range
 _TIE = 1e-12  # bounds closer than this are treated as equal
@@ -64,6 +77,7 @@ class Clearing:
     net_yes: float  # D: YES shares bought from the LMSR (negative: NO shares)
     lmsr_cost: float  # cash paid to the LMSR for |D| shares
     fills: dict[int, float]  # order_id -> shares filled (0 if not)
+    surplus: float = 0.0  # payments beyond LMSR cost and sets; kept by the LMSR (marginal rule only)
 
     def paid(self, order: SealedOrder) -> float:
         """Cash this order pays for its fill."""
@@ -85,11 +99,21 @@ def average_price(q_yes: float, q_no: float, b: float, d: float) -> float:
     return 1.0 - cost_at_price(p, b, Side.NO, -d) / (-d)
 
 
-def _imbalance_for_price(q_yes: float, q_no: float, b: float, p: float, lo: float, hi: float) -> float:
-    """The d in [lo, hi] whose average price equals p (average price increases with d), by bisection."""
+def marginal_price(q_yes: float, q_no: float, b: float, d: float) -> float:
+    """YES price after trading a net imbalance d with the LMSR (X-4): logit moves by d / b."""
+    p = price_yes(q_yes, q_no, b)
+    return sigmoid((q_yes - q_no) / b + d / b) if abs(d) >= 1e-15 else p
+
+
+PRICE_RULES = {"average": average_price, "marginal": marginal_price}
+
+
+def _imbalance_for_price(q_yes: float, q_no: float, b: float, p: float, lo: float, hi: float,
+                         price_of=average_price) -> float:
+    """The d in [lo, hi] whose price (under `price_of`) equals p; both price rules rise with d. Bisection."""
     for _ in range(BISECTION_STEPS):
         mid = (lo + hi) / 2
-        if average_price(q_yes, q_no, b, mid) < p:
+        if price_of(q_yes, q_no, b, mid) < p:
             lo = mid
         else:
             hi = mid
@@ -112,8 +136,10 @@ def _demand(orders: Sequence[SealedOrder], p: float, strict: bool) -> float:
     return d
 
 
-def clear_batch(orders: Sequence[SealedOrder], q_yes: float, q_no: float, b: float) -> Clearing:
+def clear_batch(orders: Sequence[SealedOrder], q_yes: float, q_no: float, b: float,
+                rule: str = "average") -> Clearing:
     """Clear a batch of sealed buy orders at one uniform price (see module docstring)."""
+    price_of = PRICE_RULES[rule]
     if not orders:
         return Clearing(price_yes(q_yes, q_no, b), 0.0, 0.0, {})
     bounds = sorted({0.0, 1.0, *(o.bound for o in orders)})
@@ -122,11 +148,11 @@ def clear_batch(orders: Sequence[SealedOrder], q_yes: float, q_no: float, b: flo
     for lo, hi in zip(bounds[:-1], bounds[1:]):
         mid = (lo + hi) / 2
         d = _demand(orders, mid, strict=True)
-        p = average_price(q_yes, q_no, b, d)
+        p = price_of(q_yes, q_no, b, d)
         if lo < p < hi:
             # exactly the orders that make up d: those whose bounds allow every price in the interval
             fills = {o.order_id: (o.size if _active(o, mid) else 0.0) for o in orders}
-            return _clearing(p, d, fills, q_yes, q_no, b)
+            return _clearing(p, d, fills, q_yes, q_no, b, price_of, orders)
 
     # 2. Otherwise the crossing sits on a bound b. Orders strictly inside fill fully. The marginal
     #    orders (bound == b) are rationed: as many matched YES/NO pairs as possible (each side pays
@@ -137,9 +163,9 @@ def clear_batch(orders: Sequence[SealedOrder], q_yes: float, q_no: float, b: flo
         yes_m = sum(o.size for o in margin if o.side is Side.YES)
         no_m = sum(o.size for o in margin if o.side is Side.NO)
         lo_d, hi_d = d_strict - no_m, d_strict + yes_m  # every reachable imbalance at price b
-        if not (average_price(q_yes, q_no, b, lo_d) - _TIE <= bound <= average_price(q_yes, q_no, b, hi_d) + _TIE):
+        if not (price_of(q_yes, q_no, b, lo_d) - _TIE <= bound <= price_of(q_yes, q_no, b, hi_d) + _TIE):
             continue
-        d_star = _imbalance_for_price(q_yes, q_no, b, bound, lo_d, hi_d)
+        d_star = _imbalance_for_price(q_yes, q_no, b, bound, lo_d, hi_d, price_of)
         extra = d_star - d_strict  # net YES the margin must contribute
         yes_fill = min(yes_m, extra + no_m)  # maximise matched volume
         no_fill = yes_fill - extra
@@ -151,17 +177,22 @@ def clear_batch(orders: Sequence[SealedOrder], q_yes: float, q_no: float, b: flo
                 fills[o.order_id] = o.size * (theta_yes if o.side is Side.YES else theta_no)
             else:
                 fills[o.order_id] = o.size if o.accepts(bound) else 0.0
-        return _clearing(bound, d_star, fills, q_yes, q_no, b)
+        return _clearing(bound, d_star, fills, q_yes, q_no, b, price_of, orders)
 
     raise AssertionError("no clearing price found: the demand/supply crossing must exist")  # pragma: no cover
 
 
-def _clearing(p: float, d: float, fills: dict[int, float], q_yes: float, q_no: float, b: float) -> Clearing:
+def _clearing(p: float, d: float, fills: dict[int, float], q_yes: float, q_no: float, b: float,
+              price_of=average_price, orders: Sequence[SealedOrder] = ()) -> Clearing:
     side, amount = (Side.YES, d) if d >= 0 else (Side.NO, -d)
     lmsr = cost_at_price(price_yes(q_yes, q_no, b), b, side, amount) if amount > 0 else 0.0
-    # The uniform price is the LMSR's average price for the imbalance actually traded.
-    price = average_price(q_yes, q_no, b, d) if abs(d) > 1e-15 else p
-    return Clearing(price_yes=price, net_yes=d, lmsr_cost=lmsr, fills=fills)
+    # The uniform price is the rule's price for the imbalance actually traded.
+    price = price_of(q_yes, q_no, b, d) if abs(d) > 1e-15 else p
+    clearing = Clearing(price_yes=price, net_yes=d, lmsr_cost=lmsr, fills=fills)
+    if price_of is average_price:
+        return clearing  # payments cover LMSR cost and sets exactly: no surplus
+    paid = sum(clearing.paid(o) for o in orders)
+    return Clearing(price, d, lmsr, fills, surplus=paid - lmsr - cost_of_sets(clearing, orders))
 
 
 def cost_of_sets(c: Clearing, orders: Sequence[SealedOrder]) -> float:
@@ -171,4 +202,4 @@ def cost_of_sets(c: Clearing, orders: Sequence[SealedOrder]) -> float:
     return min(yes, no)
 
 
-__all__ = ["SealedOrder", "Clearing", "clear_batch", "average_price", "cost_of_sets", "cost"]
+__all__ = ["SealedOrder", "Clearing", "clear_batch", "average_price", "marginal_price", "cost_of_sets", "cost"]

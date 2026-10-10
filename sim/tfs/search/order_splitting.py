@@ -32,6 +32,13 @@ One block of the game:
      points the way MAX believes with probability = MAX's belief. Both move by the same
      log-odds, so news changes the price level, not the gap.
 
+**Crowd-aware variant** (EXPLORATORY X-5, D-057). With `crowd_ahead` set, a CHANCE layer
+sits between MAX and MIN: the other researchers with the same signal close a random share
+of the gap *before* MAX's slice executes (five equally likely values, measured on the
+baseline). If they already pushed the price to MAX's limit, the slice reverts and earns
+nothing. The rest of the block's closure by everyone else is `kappa` (then `kappa_rest`).
+Without `crowd_ahead` the game is exactly the E4 game.
+
 Everything is in the YES direction: a NO edge is mirrored first. States are snapped to a
 grid (price and belief in steps of `logit_step`; R on a geometric grid), so that equal
 states are *exactly* equal. That makes the transposition table exact, and lets the
@@ -74,6 +81,7 @@ class SplitParams:
     logit_step: float  # grid for belief and price
     size_ratio: float  # geometric grid for R
     max_depth: int  # deepest search used (makes the value bounds valid)
+    crowd_ahead: tuple[float, ...] = ()  # X-5: equally likely shares of the gap the crowd closes before MAX's slice
 
 
 def split_params(cfg: SimConfig) -> SplitParams:
@@ -89,9 +97,10 @@ def split_params(cfg: SimConfig) -> SplitParams:
     a, info, ex = cfg.agents, cfg.information, cfg.agents.forecasters.execution
     b = cfg.market.b_main
     noise = a.noise_main
+    crowd = ex.rule == "crowd_expectiminimax"  # X-5: the crowd ahead is a chance node; kappa is what remains
     return SplitParams(
         b=b,
-        kappa=ex.kappa,
+        kappa=ex.crowd_kappa if crowd else ex.kappa,
         noise_sigma=math.sqrt(noise.count * noise.rate * 2.0 * noise.mean_size ** 2) / b,
         news_prob=info.public.rate,
         news_size=info.public.expected_nats * info.precision_scale / (info.public.rate * cfg.market.ticks),
@@ -104,11 +113,13 @@ def split_params(cfg: SimConfig) -> SplitParams:
         logit_step=ex.logit_step,
         size_ratio=ex.size_ratio,
         max_depth=ex.depth,
+        crowd_ahead=tuple(ex.crowd_ahead) if crowd else (),
     )
 
 
 class Phase(Enum):
     MAX = "max"
+    CROWD = "crowd"  # X-5 only: a chance node
     MIN = "min"
     CHANCE = "chance"
 
@@ -155,7 +166,7 @@ class OrderSplittingGame:
     def node(self, s: SplitState) -> Node:
         if s.phase is Phase.MAX and (s.remaining < self.params.min_order or s.belief <= s.price):
             return Node.TERMINAL  # nothing left to buy, or no edge left in this direction
-        return {Phase.MAX: Node.MAX, Phase.MIN: Node.MIN, Phase.CHANCE: Node.CHANCE}[s.phase]
+        return {Phase.MAX: Node.MAX, Phase.CROWD: Node.CHANCE, Phase.MIN: Node.MIN, Phase.CHANCE: Node.CHANCE}[s.phase]
 
     def push_cap(self, s: SplitState) -> float:
         """Shares that take the price exactly to the belief (KellyTrader's cap)."""
@@ -171,12 +182,20 @@ class OrderSplittingGame:
 
     def result(self, s: SplitState, action: float) -> tuple[float, SplitState]:
         if s.phase is Phase.MAX:
-            return 0.0, SplitState(Phase.MIN, s.belief, s.price, s.remaining, slice=action, fresh=s.fresh)
+            nxt = Phase.CROWD if self.params.crowd_ahead else Phase.MIN
+            return 0.0, SplitState(nxt, s.belief, s.price, s.remaining, slice=action, fresh=s.fresh)
+        if not self._fills(s, front=action):  # X-5 only: the crowd took the price past MAX's limit
+            return 0.0, SplitState(Phase.CHANCE, s.belief, s.price, s.remaining, fresh=s.fresh)
         return self._execute(s, front=action), SplitState(
             Phase.CHANCE, s.belief, s.price + s.slice / self.params.b, s.remaining - s.slice, fresh=s.fresh)
 
     def outcomes(self, s: SplitState) -> list[tuple[float, SplitState]]:
         p = self.params
+        if s.phase is Phase.CROWD:  # X-5: the same-signal crowd trades ahead of MAX's slice
+            share = 1.0 / len(p.crowd_ahead)
+            # snapped to the grid like every other price, so repeated states hit the transposition table
+            return [(share, SplitState(Phase.MIN, s.belief, self.snap_logit(s.price + a * (s.belief - s.price)),
+                                       s.remaining, slice=s.slice, fresh=s.fresh)) for a in p.crowd_ahead]
         pushed = s.price + p.kappa * (s.belief - s.price)  # other traders close part of the gap
         up = sigmoid(s.belief)  # MAX's own probability that news points to YES
         news = [(1.0 - p.news_prob, 0.0), (p.news_prob * up, p.news_size), (p.news_prob * (1.0 - up), -p.news_size)]
@@ -189,11 +208,21 @@ class OrderSplittingGame:
         return out
 
     def heuristic(self, s: SplitState) -> float:
-        """Send everything now; the predator replies with its worst allowed front-run."""
-        q = min(s.remaining, self.push_cap(s))
+        """Send everything now; the predator replies with its worst allowed front-run.
+
+        In the crowd-aware game (X-5) the crowd trades first, so the estimate is averaged over
+        the crowd's outcomes, from the price each leaves.
+        """
+        if not self.params.crowd_ahead:
+            return self._send_all_now(s.belief, s.price, s.remaining)
+        return sum(self._send_all_now(s.belief, s.price + a * (s.belief - s.price), s.remaining)
+                   for a in self.params.crowd_ahead) / len(self.params.crowd_ahead)
+
+    def _send_all_now(self, belief: float, price: float, remaining: float) -> float:
+        q = min(remaining, self.params.b * (belief - price))
         if q < self.params.min_order:
             return 0.0
-        at_min = SplitState(Phase.MIN, s.belief, s.price, s.remaining, slice=q)
+        at_min = SplitState(Phase.MIN, belief, price, remaining, slice=q)
         return min(self._execute(at_min, f) for f in self._allowed_front_runs(at_min))
 
     def bounds(self, s: SplitState) -> tuple[float, float]:
@@ -218,6 +247,13 @@ class OrderSplittingGame:
             return 0.0
         paid = cost_at_price(sigmoid(s.price + front / self.params.b), self.params.b, Side.YES, s.slice)
         return max(0.0, s.slice * sigmoid(s.belief) - paid)  # max(): rounding at exactly the limit
+
+    def _fills(self, s: SplitState, front: float) -> bool:
+        """Does MAX's slice still meet its limit? Always true in the E4 game (by construction); X-5 checks it."""
+        if not self.params.crowd_ahead or s.slice == 0.0:
+            return True
+        paid = cost_at_price(sigmoid(s.price + front / self.params.b), self.params.b, Side.YES, s.slice)
+        return paid <= s.slice * sigmoid(s.belief) + 1e-9
 
     def _allowed_front_runs(self, s: SplitState) -> list[float]:
         """MIN's options {0, x_max/2, x_max}, keeping only those the predator expects to profit from."""

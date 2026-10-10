@@ -186,7 +186,7 @@ def cmd_shock_study(args: argparse.Namespace) -> None:
 def cmd_measure_env(args: argparse.Namespace) -> None:
     """Environment numbers for the order-splitting game, measured on baseline runs (D-053)."""
     from tfs.core.config import expand_sweep
-    from tfs.experiments.environment import as_dict, measure_kappa, measure_predator
+    from tfs.experiments.environment import as_dict, measure_crowd, measure_kappa, measure_predator
 
     def point(config: Path, label: str):
         return {p.label: p.config for p in expand_sweep(load_raw(config))}[label]
@@ -196,7 +196,8 @@ def cmd_measure_env(args: argparse.Namespace) -> None:
     reference = point(Path("sim/experiments/configs/e2a.yaml"), "agents.predators.count=1|baseline")
     seeds = range(args.seeds)
     result = as_dict(measure_kappa(no_predator, seeds, first_market=5),
-                     measure_predator(reference, seeds, first_market=5))
+                     measure_predator(reference, seeds, first_market=5),
+                     measure_crowd(no_predator, seeds, first_market=5))
     out = args.out / "environment"
     out.mkdir(parents=True, exist_ok=True)
     (out / "environment.json").write_text(json.dumps(result, indent=2))

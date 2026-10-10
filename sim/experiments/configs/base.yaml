@@ -75,6 +75,8 @@ agents:
       size_ratio: 1.189   # 2^(1/4): neighbouring points of the remaining-shares grid differ by 19%
       twap_slices: 5      # TWAP sends 1/5 of the shortfall each block
       users: null         # null: every forecaster uses `rule` (H4 primary); 1 = the single-deviator variant
+      crowd_ahead: []     # EXPLORATORY X-5 only (crowd_expectiminimax): set in x5.yaml from `tfs measure-env`
+      crowd_kappa: 0.0
     research:
       mode: always        # E1 fixes participation; season experiments use "endogenous"
       cost_median: null   # set by the cost-calibration rule (DECISIONS D-017) for endogenous runs
@@ -160,6 +162,8 @@ mempool:
   proving_delay: 1        # D-046 rule ceil(prove time / 12 s block): median 0.28 s -> 1 tick (D-048).
                           #   Conservative against ZK: a 0.28 s proof fits inside one block in reality.
   sender_visible: true    # commits come from the trader's own address (reference); false = relayer variant
+  clearing: average       # D-046 (pre-registered E3 rule). EXPLORATORY X-4 uses "marginal": the uniform
+                          #   price is the LMSR's post-trade marginal price; the LMSR keeps the surplus
 
 metrics:
   epsilon: 0.05           # "close enough" to p*_avail for time-to-epsilon

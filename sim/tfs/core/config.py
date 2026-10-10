@@ -28,7 +28,7 @@ import yaml
 
 BeliefModel = Literal["own_signals", "price_anchored"]
 ResearchMode = Literal["always", "endogenous"]
-SliceRule = Literal["capped", "naive", "twap", "random", "expectiminimax"]
+SliceRule = Literal["capped", "naive", "twap", "random", "expectiminimax", "crowd_expectiminimax"]
 ShockStatus = Literal["drawn", "true", "false"]
 
 
@@ -121,6 +121,8 @@ class ExecutionConfig:
     size_ratio: float  # geometric search grid for the remaining shares
     twap_slices: int  # TWAP sends 1/twap_slices of the shortfall per block
     users: int | None  # forecasters (lowest indices) using `rule`; the others use capped. None = all
+    crowd_ahead: tuple[float, ...]  # X-5: shares of the gap the same-signal crowd closes before my order (measured)
+    crowd_kappa: float  # X-5: share of the gap everyone else closes in the rest of the block (measured)
 
 
 @dataclass(frozen=True)
@@ -215,6 +217,7 @@ class AgentsConfig:
 
 
 MempoolPolicyName = Literal["public", "private_relay", "commit_reveal", "zk_batch"]
+ClearingRule = Literal["average", "marginal"]
 
 
 @dataclass(frozen=True)
@@ -225,6 +228,7 @@ class MempoolConfig:
     escrow_tiers: tuple[float, ...]  # fixed escrow sizes (USDC), so escrow does not reveal order size
     proving_delay: int  # ticks to generate a ZK proof before a sealed order can be committed (zk_batch)
     sender_visible: bool  # can observers see who sent a commitment? False = relayer variant
+    clearing: ClearingRule  # batch price: LMSR average (D-046) or post-trade marginal (EXPLORATORY X-4)
 
 
 @dataclass(frozen=True)

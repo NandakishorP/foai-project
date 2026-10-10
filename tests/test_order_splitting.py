@@ -111,3 +111,26 @@ def test_search_benchmark_rows_agree_with_plain_search() -> None:
     plain = {r.depth: r.mean_nodes for r in rows if r.variant == "plain" and r.depth < 5}
     full = {r.depth: r.mean_nodes for r in rows if r.variant == "+ transposition table"}
     assert all(full[d] <= plain[d] for d in plain)
+
+
+# --------------------------------------------------------------------------- X-5: the crowd-aware game (EXPLORATORY)
+
+
+def test_a_crowd_that_always_takes_the_whole_gap_leaves_nothing() -> None:
+    game = OrderSplittingGame(dataclasses.replace(PARAMS, crowd_ahead=(1.0,)))
+    root = game.root(0.8, 0.0, 40.0)
+    assert expectiminimax(game, root, 2) == pytest.approx(0.0, abs=1e-9)
+
+
+def test_a_crowd_that_never_trades_ahead_changes_nothing_but_the_check() -> None:
+    plain = OrderSplittingGame(PARAMS)
+    crowd = OrderSplittingGame(dataclasses.replace(PARAMS, crowd_ahead=(0.0,)))
+    for _, root in _roots(10, seed=3):
+        assert expectiminimax(crowd, root, 2) == pytest.approx(expectiminimax(plain, root, 2), abs=1e-9)
+
+
+def test_pruning_is_exact_on_the_crowd_game() -> None:
+    game = OrderSplittingGame(dataclasses.replace(PARAMS, crowd_ahead=(0.0, 0.2, 0.5, 0.8, 1.0)))
+    for _, root in _roots(20, seed=4):
+        expected = expectiminimax(game, root, 2)
+        assert Searcher(game, Options()).value(root, 2) == pytest.approx(expected, abs=1e-9)

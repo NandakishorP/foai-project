@@ -79,6 +79,7 @@ def market_row(record: MarketRecord, season: SeasonRecord, epsilon: float) -> di
     row["exec_delay"] = record.exec_delay
     row["unrevealed"] = record.unrevealed
     row["slashed"] = record.slashed
+    row["lmsr_surplus"] = record.lmsr_surplus
     n_researchers = len(record.researchers)
     row["pnl_per_researcher"] = row["pnl_forecaster"] / n_researchers if n_researchers else math.nan
     costs = [season.traits[i].cost for i in record.researchers]
