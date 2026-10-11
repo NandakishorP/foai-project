@@ -1,154 +1,279 @@
-# Truth for Sale — Report (DRAFT)
+# Truth for Sale — How much truth does an on-chain prediction market lose to front-running, and can zero-knowledge batching buy it back?
 
-*Status: draft, written phase by phase. Numbers are copied from the archived results named in each section. Verdicts follow `docs/PREREGISTRATION.md`. Everything that must appear next to a verdict is in `docs/report/DISCLOSURES.md` and is repeated here where it applies.*
+*DRAFT. Sections 4–6 are drafted for owner review. Sections 1, 2, 3, 7, 8, 9 and the appendix follow after that review. Every number is copied from an archive named next to it (paths are relative to `docs/report/`). Verdicts follow `docs/PREREGISTRATION.md`. Everything that must sit next to a verdict is in `DISCLOSURES.md` and is repeated here where it applies. Decision numbers (D-…) refer to `docs/DECISIONS.md`.*
 
-## 1. Question and hypotheses
-On a public blockchain, pending orders are visible before they execute. In an on-chain prediction market, a trader who paid for research reveals that research through its orders. A "predator" that watches the mempool can trade ahead of it.
+---
 
-We ask how much "truth" (forecast accuracy) such a market loses to predators, and whether a zero-knowledge sealed-order batch auction restores it, and at what cost.
-- **H1 (short run):** with a fixed set of informed traders, front-running mostly redistributes profit, and truth lost rises only modestly.
-- **H2 (long run):** when research is a choice, predators shrink research participation and truth lost rises sharply.
-- **H3 (defense):** a ZK sealed batch auction restores participation and accuracy at a measurable cost.
-- **H4 (smart execution, added before E4):** search-based order splitting keeps more of the informed edge than the best simple execution rule.
+## 1. Abstract
+*(after review of sections 4–6)*
 
-Verdict rules were committed before each experiment ran (git history is the evidence).
+## 2. Problem and framing
+*(after review: the question, hypotheses H1–H4, the Topic 6 requirement mapping, and the full list of tools)*
 
-## 2. Course concepts and where they are in the code
-| Concept | Where |
+## 3. Prior work
+*(after review: verified citations only)*
+
+---
+
+## 4. System design
+
+### 4.1 Architecture
+The system is a discrete-time multi-agent simulation (1 tick = 1 block) with two interchangeable execution engines:
+
+```
+experiment runner (YAML configs, 200 seeds, paired bootstrap)
+        │
+        ▼
+ world (signals) ──▶ agents ──▶ mempool (visibility, latency, policy) ──▶ builder (ordering) ──▶ engine ──▶ market
+                                                                                       │
+                                                         FastEngine (Python) ◀── differential test ──▶ EvmEngine (Anvil + Solidity)
+```
+
+- **Each tick:**
+  1. the world publishes the tick's signals (all drawn in advance into a `SignalTape`);
+  2. every agent perceives only what it may see and returns transactions;
+  3. the mempool decides who can read pending transactions, and when;
+  4. the builder orders the block;
+  5. the engine executes it.
+- **One master seed, many streams.** Each source of randomness (signals, noise orders, research decisions, …) has its own named stream. Runs that differ in one setting (say, a predator) therefore see identical signals and noise. That makes paired comparisons possible.
+- **FastEngine and EvmEngine** implement the same `Engine` interface.
+  - FastEngine (pure Python) runs the Monte Carlo experiments.
+  - EvmEngine runs the same blocks on the Solidity contracts on a local Anvil chain, with automine off; the builder mines each block.
+  - A differential test replays identical scenarios on both. It passes on five scenarios: max |Δprice| ≤ 5e-16 for continuous trading and ≤ 1.8e-8 for sealed batches (`phase2b/report.txt`, `phase3a/difftest_report.txt`; D-044, D-050).
+- **Mempool policies** (the experimental variable):
+  - `PUBLIC`: pending transactions readable after each observer's latency;
+  - `PRIVATE_RELAY`: only the builder sees them;
+  - `COMMIT_REVEAL`: sealed orders with escrow and slashing;
+  - `ZK_BATCH`: sealed orders with a validity proof (§4.4).
+
+### 4.2 The market
+- **Main market.** A binary LMSR with liquidity b = 100. Cost C(q) = b·ln(e^{q_YES/b} + e^{q_NO/b}); price p = sigmoid((q_YES − q_NO)/b). The market maker's loss is bounded by b·ln 2.
+- **Reference venue.** A second, smaller LMSR (b = 30) on the same event. It sees public news only, five blocks late. Cross-venue arbitrage links the two (D-005).
+- **Sealed-batch clearing** (D-046). Every K = 5 blocks the revealed buy orders clear at one uniform price.
+  - Matched YES/NO pairs become complete sets; only the net imbalance trades with the LMSR.
+  - The price is the fixed point at which the LMSR's *average* price for the imbalance equals the price.
+  - Orders whose limit equals the clearing price are filled pro rata.
+  - This replaces the SPEC's original "drop every violated order" rule (D-004). With identical researcher limits, that rule empties whole batches.
+  - The exploratory X-4 replaces the average price by the post-trade *marginal* price (§6.3).
+
+### 4.3 Agents (PEAS)
+Every agent class carries its PEAS description in its docstring (`sim/tfs/agents/`).
+
+| Agent | Performance | Environment | Actuators | Sensors | Decision logic (course concept) |
+|---|---|---|---|---|---|
+| Informed forecaster | Trading profit net of research cost; over a season, the research decision | Main LMSR, public news, own research signals, other traders | Buy/sell YES/NO on the main market, one order per block. The slice size is set by a slice rule (E4) | Own research signals (at once), public news (1 block late), price, own account | Bayesian log-odds belief; fractional Kelly target (utility); research iff EMA(profit) > cost; order splitting by expectiminimax (adversarial search) |
+| Public-news trader | Trading profit | One venue, public news, other traders | Buy/sell on its venue | Public news (late), its venue's price, own account | Bayesian belief from public news; fractional Kelly |
+| Noise trader | None optimised (exogenous reasons) | One venue | Random market buys | None (the clock, in a depeg) | Poisson arrivals, random side and size (stochastic environment) |
+| Arbitrageur | Locked-in profit with limited capital | Both venues | Atomic two-leg bundles | Both prices, own cash, collateral value | Closed-form optimal size; under a depeg, worst-case dollar payoff (utility, search) |
+| Trend follower | Trading profit | Main market | Market buy/sell orders | Price history, own account | Fast/slow EMA crossover (Topic 6) |
+| Predator (MEV) | Profit net of fees and builder bids | Main market, public mempool, builder | Front-run requests (optionally back-runs); unwinds | Pending transactions after its latency; executed trades; price | Beta posterior per address from post-trade markouts (belief state); expected-value front-run sizing net of exit slippage (utility) |
+| Metadata predator | Trading profit | Sealed-batch market, commit metadata | One sealed order per batch | Commit metadata (sender, tier), revealed fills, price | Per-address markout average; copy-trades informed senders (H3a's adversary) |
+| Attackers (non-reveal, free-option, spam) | None optimised | Sealed-batch market | Sealed commitments, reveal choices | Public reveals (free option) | Stress the defense's costs (SPEC §5.1) |
+| Whale | Holds the price at a target (its objective); loss reported | Main market | Buy orders | Price, clock, own cash | Moves the price to the target each block within its budget (E5) |
+
+The block **builder** orders transactions by priority fee, then arrival, and sells a front-run slot for a bid. It is part of the environment, not an agent with goals.
+
+### 4.4 Contracts and the zero-knowledge circuit
+**Solidity** (Foundry, Solidity 0.8.27, OpenZeppelin v5.1.0, PRBMath v4.1.0; `contracts/src/`):
+
+| Contract | Role |
 |---|---|
-| Agents with PEAS descriptions | every class in `sim/tfs/agents/` |
-| Belief states (Bayesian updating) | `agents/beliefs.py` (log-odds updating); predator's Beta posterior per address (`agents/predator.py`) |
-| Utility-based decisions | fractional Kelly (`agents/kelly.py`); predator's expected-value front-run sizing |
-| Search | arbitrageur's optimal size; predator's grid search |
-| Adversarial search | order-splitting expectiminimax with alpha-beta (`sim/tfs/search/`, Phase 3b) |
-| Topic 6 agents | arbitrageur (cross-venue), trend follower, noise traders, shock events |
+| `MockUSDC` | 6-decimal collateral |
+| `OutcomeShares` | binary conditional tokens: split, merge, redeem (modelled on Gnosis Conditional Tokens) |
+| `LMSRMarket` | the LMSR in SD59x18 fixed point, log-sum-exp for stability |
+| `TradeRouter` | fees, atomic bundles, revert protection (the builder's view of a block) |
+| `OptimisticOracle` | propose, dispute, settle |
+| `IdentityRegistry` | staked identity registration; Poseidon2 Merkle tree of identities (depth 8) |
+| `SealedBatchAuction` | commit (with proof), reveal (Poseidon2 opening), clear (the price ladder of §4.2 in fixed point); refunds and slashing |
+| `SealedOrderVerifier` | the Barretenberg-generated UltraHonk verifier |
 
-## 3. Phase 1 — The world (information model, market, baseline)
-- **Information model** (SPEC §2): binary outcome; Gaussian public news and research signals; exact Bayesian ideal prices p*_full (all potential information) and p*_avail (information actually acquired).
-- **Truth lost:** MSE of the market price against p*_full. It splits additively into aggregation loss and participation loss; a test checks that the cross term vanishes across seeds (D-001).
-- **Market:** an LMSR main market and a smaller public-news-only reference venue. Agents: informed forecasters (Bayesian, fractional Kelly), public-news traders, noise traders, a cross-venue arbitrageur, trend followers.
-- **Finding F-001.** With independent research signals the market priced only about 9% of the research information, because Kelly traders move the price toward the *average* belief. The owner chose correlated research signals with an exact posterior (D-024).
-- **Calibration** (pre-declared rule, D-029/D-030): the baseline froze at ρ = 1 (one shared research signal, the Grossman–Stiglitz textbook case), informed capital 2 × b, and cheap research. This gives 55% steady-state participation and 70% of the research information priced.
-- **Limitation:** only ρ = 1 met both calibration criteria. At ρ = 1, researcher exit shows up as aggregation loss, not participation loss.
+- **47 Foundry tests**, including invariant tests: collateral equals complete sets, holdings match the LMSR state, market-maker solvency within b·ln 2, price in [0, 1]. They also include a fuzzed batch test and a real-proof end-to-end test.
+- **Gas** (median): LMSR buy about 158k, sell about 128k, arbitrage bundle about 456k; proof verification about 2.84M.
 
-## 4. Phase 2 — Predators (H1, H2) and on-chain fidelity
-**Predator** (D-034): a Beta posterior per address from post-trade markouts; front-runs when expected value net of exit slippage and builder bid is positive. Reference parameters were fixed before any run.
+**Circuit `sealed_order`** (Noir 1.0.0-beta.16, Barretenberg v2.1.8 UltraHonk; `circuits/sealed_order/src/main.nr`). Without revealing the order or which identity sent it, the proof shows that:
+1. the commitment opens to a well-formed buy order: side ∈ {YES, NO}, 0 < limit < 1, size > 0. The commitment is Poseidon2(side, limit, size, salt, secret);
+2. it is solvent: limit × size ≤ the posted escrow, which comes in fixed tiers {5, 25, 125, 625} USDC so it does not leak the size;
+3. the sender is a registered identity: Poseidon2(secret) is in the registry's Merkle tree;
+4. the nullifier equals Poseidon2(secret, batch_id), so each identity gets one order per batch.
 
-**H1 — partly supported** (E2a, 200 paired seeds, markets 6–30):
-- truth-lost RMS +3.4% [+3.2, +3.7];
-- leakage 0.130 [0.123, 0.138] (the threshold was ≥ 0.30).
+- **Tests:** ten circuit tests (the valid case and each invalid case). The Poseidon2 implementation on chain is cross-checked against Noir's.
+- **Performance:** proving takes 0.28 s (median; p95 0.29 s; Apple M4 Pro).
+- **Deployability:** the generated verifier fits Ethereum's 24,576-byte contract-size limit only when compiled with optimizer runs = 1 (23,723 bytes). The local chain enforces the limit (D-052).
 
-**H2 — contradicted** (E2b, markets 21–30):
-- participation gap 6.0 pp [4.5, 7.6];
-- truth lost +11% [+6, +17].
+**ZK compared with plain commit-reveal.** Both use escrow and slashing. ZK's distinct contribution is that every commitment is proven valid and solvent *at commit time*. In commit-reveal, an insolvent or invalid order is only discovered at reveal (SPEC §5).
 
-**Sensitivity disclosed with the verdict:** a more aggressive viable predator (r = 0.5) would give "partly supported" (10.4 pp; +18%). The pre-registered verdict stands.
+### 4.5 Adversarial search: the order-splitting game (SPEC §6.1)
+- **The game, replanned every block.** A forecaster with R shares still to buy:
+  - **MAX** picks a slice (0, R/8, R/4, R/2 or R).
+  - **MIN, the predator**, picks a front-run (none, half or the most it can take). It only considers front-runs that are profitable under its own EV formula, using the beliefs the real predator holds (D-053, D-054).
+  - **CHANCE:** noise traders, public news and other traders closing the gap move the price.
+- **The search.** Depth-limited expectiminimax with:
+  - alpha-beta pruning at MAX/MIN nodes;
+  - Star1 pruning at chance nodes, which uses value bounds;
+  - move ordering;
+  - a transposition table, made exact by keeping states on a grid.
+- **Correctness.** Every combination of the speed-ups returns the plain expectiminimax value exactly. This holds on 620 random games with repeated states and on the real game (`tests/test_expectiminimax.py`, `tests/test_order_splitting.py`).
+- **Walkthrough:** `walkthroughs/search.md` gives a plain-language walkthrough with line references and two hand-solvable trees, which are also tests.
 
-**Finding F-002:** most research rent is lost to researchers competing on the same signal, not to the predator (Holden & Subrahmanyam 1992).
+---
 
-**Phase 2b:** Solidity contracts (LMSR in PRBMath fixed point, outcome shares, router, oracle) agree with the Python engine in a differential test. The prices match to 1e-15, and the archived front-run replays on-chain trade for trade. Gas: LMSR buy about 158k.
+## 5. Methodology
 
-## 5. Phase 3a — The defense (H3)
-**Mechanism** (D-046):
-- sealed buy orders committed with a Noir/UltraHonk validity proof (Poseidon2 commitment, escrow solvency, identity-set membership, nullifier);
-- revealed and cleared every K = 5 blocks at one uniform price, with a pro-rata margin, netting through the LMSR.
+### 5.1 Information model (SPEC §2)
+- **The outcome:** each market has a hidden binary outcome Y.
+- **Signals.** Information arrives as Gaussian signals centred on +μ (Y = 1) or −μ (Y = 0):
+  - **public news:** a Poisson stream, about 10 items and 2 nats per market;
+  - **research signals:** about 10 events and 2 nats pooled, received only by forecasters who pay the research cost;
+  - **one breaking-news shock:** 1 nat at tick 100.
+- **Correlated research.** Signals are correlated across forecasters (ρ); the exact posterior of a group uses the group's mean signal (D-024).
+- **Two ideal prices,** both exact Bayesian posteriors:
+  - p*_full uses every potential signal: the best the market could know;
+  - p*_avail uses only the signals actually bought.
 
-**Costs** (SPEC §5.1):
-- proof 0.28 s;
-- verification about 2.84M gas, about 18× a public buy;
-- the verifier fits EIP-170 only when compiled with optimizer runs = 1;
-- execution delay about 4 ticks at K = 5.
+### 5.2 Truth lost and its decomposition
+- **Definition:** truth lost = E[(p_t − p*_full,t)²], reported as RMS.
+- **The decomposition** (D-001): E[(p − p*_full)²] = E[(p − p*_avail)²] + E[(p*_avail − p*_full)²].
+  - The first term is **aggregation loss**: information existed but was not priced.
+  - The second is **participation loss**: information was never bought.
+- **The cross term** vanishes in expectation, because p*_avail is the conditional expectation of p*_full given the acquired information. A test checks it is zero across seeds, and a deliberately leaky market fails that test.
+- **When the decomposition is not claimed:** scenarios that force a shock's status condition on a rare event, so the decomposition is not claimed for them.
 
-**Verdicts** (E3, 200 paired seeds):
+### 5.3 Calibration (pre-declared rules)
+- **First attempt (F-001).** With independent research signals (ρ = 0), the market priced only about 9% of the research information. Kelly traders move the price towards the *average* belief.
+- **Round 1 (D-026, D-028).** A pre-declared calibration grid over ρ, informed capital and research cost found no point meeting both criteria: steady-state participation 50–70% and at least 60% of research information priced.
+- **Round 2 (D-029, D-030; 72 points).** Only ρ = 1 met both criteria. Frozen values:
+  - **ρ = 1:** one shared research signal, the Grossman–Stiglitz textbook case;
+  - informed bankroll 2 × b per market;
+  - median research cost 1.716.
+- **The resulting baseline:** 55% steady-state participation and 70% of research information priced.
+- **Frozen for every later experiment,** with one consequence: at ρ = 1 a researcher leaving removes informed capital (aggregation loss), not information (participation loss).
 
-| | Result | Verdict |
+### 5.4 Pre-registration and statistics
+- **Pre-registration.** Verdict rules for H1–H4 were committed before the experiment they judge (`docs/PREREGISTRATION.md`; commits `b803d95`, `ab7e174`, `cfd0294`), with thresholds and the reference configuration. Any change made after a run started is logged in DECISIONS and disclosed.
+- **Paired design.** Every comparison uses the same 200 master seeds, so signals and noise orders are identical between twins.
+- **Confidence intervals.** 95% paired-bootstrap intervals: 10,000 resamples of seeds, bootstrap seed 0, percentile method. Statistics that combine several cells resample the seeds jointly.
+- **The strict rule:** a threshold counts only if the whole CI clears it.
+- **Exploratory and descriptive results** (X-1 to X-5, the shock scenarios, E5) are labelled as such and never change a verdict.
+
+---
+
+## 6. Results by act
+
+### 6.1 Act 1 — The world works (E1; `phase1_milestone/`)
+- **E1 setting:** single markets, full participation, 200 seeds.
+- **Baseline accuracy:** truth-lost RMS 0.035 [0.034, 0.036]. The market prices 96% of the research information, and 90% of runs settle within ε of p*_avail after the shock.
+- **ρ sweep:** the shared-signal baseline is far more accurate than independent research. Truth-lost RMS falls from 0.171 (ρ = 0) to 0.035 (ρ = 1).
+- **Seasons with a research choice** (30 markets): participation falls from 100% to a steady 55% [52, 59] by markets 21–30.
+- **Decomposition check:** the cross term over the season is 2.0e-5 [−6.5e-5, 1.1e-4], consistent with 0.
+
+### 6.2 Act 2 — Predators (H1, H2; `phase2a/`)
+The reference predator's parameters were fixed before any run (D-034).
+
+| Hypothesis | Measured (200 paired seeds) | Verdict |
 |---|---|---|
-| H3a residual leakage | R = 0.03 [−0.06, 0.12] | supported |
-| H3b anti-crowding | profit ratio 0.85 [0.83, 0.86] | contradicted |
-| H3c delay cost vs K | ΔT(5) = 17.2 ticks [16.5, 17.9] | contradicted |
-| H3 overall | truth-lost RMS +43% [+36, +51] | contradicted |
+| H1 (E2a, markets 6–30, research forced) | Truth-lost RMS +3.4% [+3.2, +3.7]; leakage 0.130 [0.123, 0.138] (threshold ≥ 0.30) | **partly supported** |
+| H2 (E2b, markets 21–30, research endogenous) | Participation gap 6.0 pp [4.5, 7.6]; truth lost +11% [+6, +17] | **contradicted** |
 
-**Next to the verdicts (DISCLOSURES):**
-- Under the pre-registered clearing rule (uniform price = the LMSR's *average* price), the price cycles around the researchers' shared belief. Accuracy and reaction speed get worse. Hiding orders without batching (PRIVATE_RELAY) keeps public-level accuracy, so the loss comes from batching, not from hiding.
-- The 1-tick proving delay is conservative. Commit-reveal (zero delay) is presented as the realistic ZK outcome: researchers' unfilled share 0.28 vs 0.57, with the same accuracy.
-- **Exploratory X-4** (marginal-price clearing; D-058):
-  - it removes the overshoot and cuts ZK's truth-lost RMS by 14–15%, but ZK stays about 2.7× the public level, because batching lags;
-  - it moves the research rent to the market maker: researcher profit falls from 5.0 to 1.2 per researcher-market.
+- **Where the edge went.** The predator nets about 5.8 per market; informed profit falls from 59.3 to 51.6 per market.
+- **Sensitivity, next to H2.** A more aggressive viable predator (r = 0.5, X-1) gives 10.4 pp and +18%, which would read "partly supported". The pre-registered verdict stands.
+- **Finding F-002:** most research rent is lost to researchers competing on the same signal. 56% of their trades revert on their own limits with no predator present. The predator taxes a small pie.
+- **On-chain fidelity (Phase 2b).** The archived front-run (seed 3, market 16, block 23; `phase2a/replay/`) replays on the Solidity contracts trade for trade.
 
-**The Act 3 conclusion: trust vs accuracy.** Hiding orders from the predator works two ways:
-- **By trust** (PRIVATE_RELAY): accurate, and the predator earns nothing, but users must trust the relay.
-- **By cryptography** (ZK_BATCH): trustless, but batching imposes a lag. The clearing rule only decides whether the price overshoots (average price) or the market maker takes the rent (marginal price).
-- **Untested future work:** a hybrid rule, with the limit check at the marginal price, average-price charging and a pro-rata rebate of the surplus. It might avoid both the overshoot and the rent loss, but not the lag.
+### 6.3 Act 3 — The defense (H3, X-4; `phase3a/`, `exploratory/x4/`)
 
-## 6. Phase 3b — Smart execution (H4) and market stability under shocks
+| Hypothesis | Measured (200 paired seeds, K = 5) | Verdict |
+|---|---|---|
+| H3a residual leakage (vs a metadata-reading predator) | R = L_ZK / L_PUB = 0.03 [−0.06, 0.12] | **supported** |
+| H3b anti-crowding | Researcher profit ZK / PUBLIC 0.85 [0.83, 0.86]; unfilled share +4.5 pp | **contradicted** |
+| H3c delay cost vs K | ΔT(5) = 17.2 ticks [16.5, 17.9] (above 3K = 15); not increasing in K | **contradicted** |
+| H3 overall (E3-E, endogenous research) | Truth-lost RMS +43% [+36, +51]; participation −2.9 pp [−4.8, −1.0] | **contradicted** |
 
-### 6.1 The search algorithm: correct and efficient
-- **The order-splitting game** (SPEC §6.1). Each block the forecaster (MAX) picks a slice, the predator (MIN) picks a front-run, and chance moves the price (noise, news, other traders).
-- **How it is solved:** depth-limited expectiminimax with alpha-beta at MAX/MIN nodes, Star1 pruning at chance nodes, move ordering and an exact transposition table on a state grid. A plain-language walkthrough with worked trees is in `docs/report/walkthroughs/search.md`.
-- **Correctness.** Every combination of the speed-ups returns exactly the plain expectiminimax value, on 620 random games and on the real game.
-- **Efficiency** (500 states from E4 seasons, depth 4): nodes per decision fall from 89,862 for plain expectiminimax to 3,469 with every speed-up, and time from 197 ms to 10.5 ms. The transposition table does most of the work, because grid states recur. Alpha-beta alone saves only 4%: the predator usually has a single allowed front-run, so MIN nodes rarely have alternatives to cut. Star1 removes nodes but costs more time than it saves. Full table: `docs/report/walkthroughs/search.md` §6.
+- **Sealing works against the predator.** The predator's take falls from 13% of the researchers' edge to 0.4%, a CI that includes 0.
+- **Batching costs accuracy.** Under the pre-registered clearing rule, the market price *overshoots* every filled limit and *lags* the information: price moves only at a clearing, once every 5 blocks (D-051, refined in D-058).
+- **Hiding without batching keeps accuracy.** PRIVATE_RELAY keeps public-level accuracy (truth MSE 0.0013) and the predator earns nothing. The accuracy loss comes from batching, not from hiding.
+- **The 2×2 decomposition** (descriptive):
+  - hiding orders from the predator is worth +0.75 per researcher-market;
+  - the batching side costs −0.92, so the crowd term dominates.
+- **Costs** (SPEC §5.1):
+  - proof 0.28 s; verification about 2.84M gas;
+  - execution delay about 4 ticks at K = 5;
+  - fill rate rises with K, from 0.44 (K = 1) to 0.68 (K = 20);
+  - truth MSE also rises with K, from 0.008 to 0.040.
+- **The conservative proving delay.** The pre-registered 1-tick delay is conservative, since a 0.28 s proof fits inside a block. Commit-reveal (zero delay) is the realistic ZK outcome: researchers' unfilled share 0.28 instead of 0.57, with the same accuracy.
+- **Attackers:**
+  - the non-reveal griefer and the spammer lose their whole bankroll and change no one else's outcome (spam is impossible under ZK);
+  - the free-option pair loses about 330 per market.
+- **Exploratory X-4: marginal-price clearing.**
+  - It removes the overshoot and lowers ZK's truth-lost RMS by 15% [14.7, 15.6], but ZK stays about 2.7× the public level, because the lag remains.
+  - It moves the research rent to the market maker: about 47–50 per market; researcher profit falls from 5.0 to 1.2 per researcher-market.
+- **Conclusion of Act 3: trust vs accuracy.**
+  - Hiding by trust (a private relay) is accurate.
+  - Hiding by cryptography (ZK batches) is trustless, but batching lags. The clearing rule only decides whether the price overshoots (average) or the market maker takes the rent (marginal).
+  - Untested future work: a hybrid rule, with the limit check at the marginal price, average-price charging and a pro-rata rebate.
 
-### 6.2 The strategy: H4 contradicted
-- **Result** (pre-registered, 200 paired seeds): the search rule earned 0.901 [0.890, 0.912] of the best simple rule, TWAP. It also lost *more* of its edge to the predator than the Phase 1–3a rule (+1.7 pp [+1.1, +2.4]).
-- **The search is correct for its game, but the game leaves out the main force.** It models one predator and a fixed competitor push. In the market, nine other researchers with the same signal send the same order at the same limit in the same block. TWAP's small slices avoid that crowd (researcher reverts 20% vs 61%), and beat the search even with no predator (0.970 [0.963, 0.975]).
-- **Minimax is only as good as its model of the game.** This risk was written into the pre-registration before the run.
-- **Private optimum, social cost.** TWAP is the best private response, but it slows price discovery: truth MSE is about 65% higher than under the capped rule without predators (0.00214 vs 0.00129). Each researcher who slows down keeps more rent and leaves the price further from the truth for longer: an externality between the individual and the market optimum.
-- **Exploratory X-5** (crowd-aware search) tests whether adding the crowd to the model closes the gap. *(to be added)*
+### 6.4 Act 4 — Smart execution (H4, E4-search, X-5; `phase3b/e4*`, `exploratory/x5/`)
 
-### 6.3 Market stability under shocks (Topic 6; descriptive, metrics fixed in D-053 before any run)
-One 200-tick market per seed, 200 seeds, research forced, no predator. Archive: `docs/report/phase3b/shock_*`, with `stability.csv`, `amplification.csv` (paired, trend followers on vs off) and the event-study and flow plots.
+**The algorithm: correct and efficient** (500 states the forecasters searched; every pruned value equals the plain value to within 2.2e-16):
 
-**True breaking news (S-T).** At tick 100 a true shock arrives. Everyone knows 20% of breaking news is false, so it is discounted until confirmed 20 ticks later.
-- The market absorbs it within about 7–8 ticks: restricted time-to-ε 7.9 ticks at 1 nat, 7.1 at 3 nats.
-- Main-market volume rises about 3× in the 20 ticks after the shock, against the 20 before.
-- The arbitrageur carries the news to the slower reference venue, which lags by a few ticks in the plots.
+| depth | plain | + alpha-beta | + Star1 | + ordering | + transposition table |
+|---|---|---|---|---|---|
+| 3 | 7,660 nodes · 17 ms | 7,388 | 7,057 · 20 ms | 3,911 | **1,486 · 4.6 ms** |
+| 4 | 89,862 · 197 ms | 86,425 | 82,348 · 236 ms | 39,045 | **3,469 · 10.5 ms** |
 
-**False breaking news (S-F).** The shock points the wrong way and is corrected 20 ticks later.
-- The price follows the false news as far as the ideal posterior does: the shock is discounted by q_false, not ignored.
-- At the correction it has to reverse. That is the most stressed moment in any scenario: max |price − p*_avail| reaches 0.20 (1 nat) and 0.29 (3 nats).
-- Arbitrage volume roughly doubles at the correction (63–90 shares vs 32–41 after the shock).
-- The less the market doubts the news (q_false 0.1 vs 0.4), the larger the reversal.
+- **The transposition table does most of the work**, because grid states recur.
+- **Alpha-beta alone saves little.** The predator usually has a single allowed front-run, so MIN nodes rarely offer alternatives to cut.
+- **Star1 removes nodes but costs more time than it saves.** This is reported, not tuned away.
 
-**Trend followers react, but barely amplify.** Paired, trend followers on (2) vs off:
-- They clearly trade in the direction of every move: +3 to +46 shares within the window. Every CI is above 0 except one (1-nat false shock with q_false 0.4: +3.3 [−0.0, +6.7]). After a false-news correction they chase the reversal (+15 to +46 shares).
-- Their effect on the price is small:
-  - overshoot rises by at most 0.007 in probability (detectable only for large or false shocks);
-  - max deviation changes by less than 0.006;
-  - recovery is often *faster* with them, by 1–2 ticks (e.g. −1.0 [−1.8, −0.3] ticks after a 1-nat true shock), because they push in the direction the information is already taking the price.
-- Two trend followers of 2 shares a tick are small against researchers who move the price by tens of shares in one block. The result is specific to that size.
+**The strategy: H4 contradicted** (pre-registered, 200 paired seeds):
 
-**Collateral depeg (S-D).** The main market's USDC is worth 0.90 dollars for 30 ticks; there is no news.
-- **The arbitrageur reacts by withdrawing.** Against the no-depeg control:
-  - the cross-venue gap more than doubles (mean |logit gap| 0.12 → 0.26);
-  - arbitrage volume falls by about 30% (36.8 → 25.8 shares);
-  - the gap's half-life rises from 19 to 23 ticks.
-- **Main-market accuracy is essentially unchanged** (max deviation 0.096 in both). Researchers keep the informed price; the reference venue is what decouples.
-- **Noise-trader withdrawal** (an input) lowers volume and activity (traders active per tick: ratio 0.99 → 0.59 when all noise traders leave). It does not hurt accuracy.
+| rule | researcher PnL per researcher-market, 1 predator | leakage | researcher reverts |
+|---|---|---|---|
+| capped (Phase 1–3a rule) | 5.16 | 0.130 | 61% |
+| naive (all at once) | 4.56 | 0.234 | 65% |
+| **TWAP** (1/5 per block) | **5.62** | **0.083** | **20%** |
+| random | 4.89 | 0.186 | 38% |
+| expectiminimax | 5.07 | 0.147 | 50% |
 
-**Batching delays the reaction to news (S-K; SPEC §5.1).** The same true shock under each policy:
-- recovery doubles: 6.9 ticks public, 13.5 ZK batch, 14.7 commit-reveal;
-- max deviation rises from 0.10 to about 0.16, and overshoot doubles;
-- the cross-venue gap widens about 4×, because the arbitrageur's batched leg is late.
+- **The verdict statistic:** R4 = search / best simple rule = 0.901 [0.890, 0.912], entirely ≤ 1.00, so **contradicted**.
+- **Search loses on leakage too:** it loses more to the predator than the capped rule (+1.7 pp [+1.1, +2.4]).
+- **Minimax is only as good as its model of the game.** The search is correct for its game, but the game leaves out the main force. It models one predator and a fixed competitor push; in the market, nine researchers with the same signal send the same order at the same limit in the same block. TWAP's small slices avoid that crowd, and beat the search even with no predator (0.970 [0.963, 0.975]). This risk was stated in the pre-registration.
+- **Private optimum, social cost.** TWAP is the best private response, but it slows price discovery: truth MSE is about 65% higher than the capped rule's without predators. That is an externality between the individual and the market optimum.
+- **Exploratory X-5: a crowd-aware search** (completed about 7 hours past its time box; D-061).
+  - The game gains the measured crowd trading ahead of the slice.
+  - It earns 0.917 [0.907, 0.927] of TWAP, against 0.906 for the plain search at the same depth. It closes about a tenth of the gap.
+  - A single crowd-aware deviator gains nothing detectable: +0.12 [−0.17, +0.41].
+  - TWAP's advantage looks like a population effect, which a best response to the observed crowd cannot find.
 
-The plots show the price moving in K = 5-block steps and lagging p*_full by about 10 ticks. This is the cost side of the defense, consistent with H3c.
+### 6.5 Market stability under shocks (Topic 6; descriptive; `phase3b/shock_*`)
+- **Setting:** one 200-tick market per seed, 200 seeds, research forced, no predator. The metrics were fixed before the runs (D-053).
+- **True breaking news.** It is absorbed within about 7–8 ticks, and volume roughly triples.
+- **False breaking news.** The price follows it only as far as the ideal posterior does, since everyone discounts breaking news by q_false. The correction 20 ticks later is the most stressed moment of any scenario: the largest gap to p*_avail is 0.20–0.29, and arbitrage volume doubles.
+- **Trend followers react but barely amplify.** They trade with every move (+3 to +46 shares; all but one CI above 0) and chase the correction's reversal. Yet overshoot rises by at most 0.007, and recovery is often 1–2 ticks *faster* with them. This holds at their configured size of 2 traders × 2 shares per tick.
+- **Collateral depeg** (the main market's USDC at 0.90 for 30 ticks). The arbitrageur withdraws: the venue gap more than doubles (0.12 → 0.26) and its volume falls about 30%. Main-market accuracy is unchanged. Noise-trader withdrawal, a scenario input, lowers activity but not accuracy.
+- **Batching after news.** Recovery doubles (6.9 ticks public, 13.5 ZK, 14.7 commit-reveal), and the price moves in 5-block steps: the cost side of the defense.
 
-(In these runs p*_avail equals p*_full, because ρ = 1 and everyone researches. The two lines coincide in the plots.)
-
-### 6.4 Manipulation: a whale backing the wrong outcome (E5; adversarial worst case)
-A whale holds the price of the outcome that will happen at 0.30 from tick 100 until its budget runs out. This is a worst case by construction, like the forced-false shock, not a model of typical whales. Its target was really on the wrong side of the best available estimate in 94.5% of its window.
-
+### 6.6 Manipulation (E5; descriptive; adversarial worst case; `phase3b/e5/`)
+- **Setting.** A whale backs the wrong outcome: it holds the price of the outcome that will happen at 0.30 until its budget is spent. The scenario picks its side, as the forced-false shock does. This is a worst case, not a model of typical whales.
+- **Manipulation verified:** its target lay on the wrong side of p*_avail in 94.5% of its window.
 - **Cost and distortion grow with the budget.** Budgets of 50, 200 and 800 lose 39, 171 and 648 (about 80%). Extra deviation × duration is +2.8, +11.2 and +39.7 probability-ticks.
-- **Informed traders collect most of the loss** (about 80%; budget 800: +526). The public-news trader, the market makers and the arbitrageur take the rest. Trend followers lose by chasing the whale.
-- **The distortion outlasts the whale.** After a large whale stops, the price stays about 0.39 away from the ideal posterior until the market ends. Researchers already hold more than their Kelly targets, so nobody has the capital or the incentive to push it back: the limits of arbitrage. This depends on the model's fixed bankrolls and quarter-Kelly sizing.
+- **Informed researchers collect about 80% of its loss.** Trend followers lose by chasing it. The arbitrageur reduces the distortion only slightly.
+- **The distortion outlasts the whale.** After a large whale stops, the price stays about 0.39 from p*_avail until the market ends.
+  - Researchers already hold more than their Kelly targets (1.56×), so nobody has the capital or the reason to push it back: the limits of arbitrage.
+  - This depends on the model's fixed bankrolls and quarter-Kelly sizing.
 
-### 6.5 Synthesis
-See `docs/report/synthesis.md`: across F-002, H3b and H4, the main adversary of an informed agent is the other informed agents sharing its signal, not the predator.
+---
 
-## 7. Phase 4 — Real-world calibration, tournament, dashboard
-*(to be written)*
+## 7. Synthesis
+*(after review; see `synthesis.md`: "the dominant adversary is other informed agents"; "trust vs accuracy")*
 
-## 8. Limitations and honesty notes
-*(collected from DISCLOSURES.md at the end)*
+## 8. Limitations and disclosures
+*(after review; every D-entry that touches results, from `DISCLOSURES.md`)*
 
-## 9. Prior work
-*(SPEC §13; never claim "first")*
+## 9. Conclusion and future work
+*(after review)*
+
+## Appendix A — Reproducibility
+*(after review: environment set-up, commands per experiment, the commit and seed range of every archived run)*
+
+## Appendix B — Decision log summary
+*(after review)*
