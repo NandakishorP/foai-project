@@ -242,7 +242,8 @@ The reference predator's parameters were fixed before any run (D-034).
   - The game gains the measured crowd trading ahead of the slice.
   - It earns 0.917 [0.907, 0.927] of TWAP, against 0.906 for the plain search at the same depth. It closes about a tenth of the gap.
   - A single crowd-aware deviator gains nothing detectable: +0.12 [−0.17, +0.41].
-  - TWAP's advantage looks like a population effect, which a best response to the observed crowd cannot find.
+  - **A single agent's best response vs a multi-agent equilibrium.** TWAP's advantage is a *population* effect: when every researcher slows down, the crowd ahead shrinks for all of them. A search that best-responds to the crowd as it is observed (measured under the capped rule) cannot find that collective gain. This is the gap between one agent's best response and the outcome all agents reach together.
+  - **Untested future work** (E7 tournament): does TWAP still pay off for a *single* deviator among researchers using other rules?
 
 ### 6.5 Market stability under shocks (Topic 6; descriptive; `phase3b/shock_*`)
 - **Setting:** one 200-tick market per seed, 200 seeds, research forced, no predator. The metrics were fixed before the runs (D-053).

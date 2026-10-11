@@ -137,6 +137,9 @@ class Searcher:
     options: Options = Options()
     stats: Stats = field(default_factory=Stats)
     table: dict[tuple[Hashable, int], tuple[float, Bound]] = field(default_factory=dict)
+    # Dashboard only: if set, every visited node is recorded by its path from the root (the actions
+    # and chance-outcome indices that lead to it) as "visited" or "tt" (answered by the table).
+    record: dict[tuple, str] | None = None
 
     def value(self, state: State, depth: int) -> float:
         """Exact value of `state` (searched with the full window)."""
@@ -146,18 +149,25 @@ class Searcher:
         """The MAX action with the highest value at a MAX root, and that value."""
         assert self.game.node(state) is Node.MAX and depth >= 1
         self.stats.nodes += 1
+        if self.record is not None:
+            self.record[()] = "visited"
         best_action, best = None, -math.inf
         for action in self.game.actions(state, ordered=self.options.ordering):
             reward, child = self.game.result(state, action)
             alpha = best - reward if self.options.alphabeta else -math.inf
-            v = reward + self._value(child, depth - 1, alpha, math.inf)
+            v = reward + self._value(child, depth - 1, alpha, math.inf, self._child((), action))
             if v > best:  # ties keep the earlier action, so the result does not depend on chance
                 best_action, best = action, v
         return best_action, best
 
-    def _value(self, state: State, depth: int, alpha: float, beta: float) -> float:
+    def _child(self, path: tuple | None, label: object) -> tuple | None:
+        return None if path is None or self.record is None else path + (label,)
+
+    def _value(self, state: State, depth: int, alpha: float, beta: float, path: tuple | None = None) -> float:
         """Value of `state`, exact if it lies inside (alpha, beta); otherwise a bound on the far side."""
         self.stats.nodes += 1
+        if self.record is not None and path is not None:
+            self.record[path] = "visited"
         kind = self.game.node(state)
         if kind is Node.TERMINAL:
             return 0.0
@@ -170,28 +180,31 @@ class Searcher:
             if bound is Bound.EXACT or (bound is Bound.LOWER and stored >= beta) or (
                     bound is Bound.UPPER and stored <= alpha):
                 self.stats.tt_hits += 1
+                if self.record is not None and path is not None:
+                    self.record[path] = "tt"
                 return stored
 
         if kind is Node.CHANCE:
-            v = self._chance(state, depth, alpha, beta)
+            v = self._chance(state, depth, alpha, beta, path)
         else:
-            v = self._decision(state, kind, depth, alpha, beta)
+            v = self._decision(state, kind, depth, alpha, beta, path)
 
         if key is not None:
             bound = Bound.UPPER if v <= alpha else Bound.LOWER if v >= beta else Bound.EXACT
             self.table[key] = (v, bound)
         return v
 
-    def _decision(self, state: State, kind: Node, depth: int, alpha: float, beta: float) -> float:
+    def _decision(self, state: State, kind: Node, depth: int, alpha: float, beta: float,
+                  path: tuple | None = None) -> float:
         """MAX or MIN node. With alpha-beta, stop as soon as the value leaves the window."""
         child_depth = depth - 1 if kind is Node.MAX else depth
         best = -math.inf if kind is Node.MAX else math.inf
         for action in self.game.actions(state, ordered=self.options.ordering):
             reward, child = self.game.result(state, action)
             if self.options.alphabeta:  # the child's window, shifted by the reward on the edge
-                v = reward + self._value(child, child_depth, alpha - reward, beta - reward)
+                v = reward + self._value(child, child_depth, alpha - reward, beta - reward, self._child(path, action))
             else:
-                v = reward + self._value(child, child_depth, -math.inf, math.inf)
+                v = reward + self._value(child, child_depth, -math.inf, math.inf, self._child(path, action))
             if kind is Node.MAX:
                 best = max(best, v)
                 if self.options.alphabeta:
@@ -204,25 +217,26 @@ class Searcher:
                 break  # the parent will never let play reach here: the remaining actions cannot matter
         return best
 
-    def _chance(self, state: State, depth: int, alpha: float, beta: float) -> float:
+    def _chance(self, state: State, depth: int, alpha: float, beta: float, path: tuple | None = None) -> float:
         """CHANCE node: the expected value. With Star1, stop once the window is out of reach."""
         outcomes = self.game.outcomes(state)
         if not (self.options.star1 and self.options.alphabeta):
-            return sum(p * self._value(child, depth, -math.inf, math.inf) for p, child in outcomes)
+            return sum(p * self._value(child, depth, -math.inf, math.inf, self._child(path, i))
+                       for i, (p, child) in enumerate(outcomes))
 
         # Star1: lo/hi are the bounds of each child's value; `done` is the weighted sum seen so far.
         child_bounds = [self.game.bounds(child) for _, child in outcomes]
         rest_lo = sum(p * lo for (p, _), (lo, _) in zip(outcomes, child_bounds))
         rest_hi = sum(p * hi for (p, _), (_, hi) in zip(outcomes, child_bounds))
         done = 0.0
-        for (p, child), (lo, hi) in zip(outcomes, child_bounds):
+        for i, ((p, child), (lo, hi)) in enumerate(zip(outcomes, child_bounds)):
             rest_lo -= p * lo
             rest_hi -= p * hi
             # The window this child must hit for the average to land inside (alpha, beta),
             # assuming the best case (hi) and worst case (lo) for the children not yet seen.
             child_alpha = max(lo, (alpha - done - rest_hi) / p)
             child_beta = min(hi, (beta - done - rest_lo) / p)
-            v = self._value(child, depth, child_alpha, child_beta)
+            v = self._value(child, depth, child_alpha, child_beta, self._child(path, i))
             done += p * v
             if done + rest_hi <= alpha:
                 return done + rest_hi  # even the best case for the rest stays below alpha

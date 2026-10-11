@@ -1,0 +1,6 @@
+# Review-day dashboard (D-062): fully offline, no usage statistics sent anywhere.
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true

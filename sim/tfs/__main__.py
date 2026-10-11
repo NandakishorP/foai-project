@@ -191,6 +191,17 @@ def cmd_e5(args: argparse.Namespace) -> None:
     print(f"wrote {run(args.config, args.seeds, args.workers, args.out, _git_state())}")
 
 
+def cmd_dashboard_data(args: argparse.Namespace) -> None:
+    """Precompute the dashboard's data and its PNG fallbacks (D-062). Deterministic."""
+    from tfs.dashboard.data import build, export_fallbacks
+    from tfs.experiments.runner import _git_state
+
+    for path in build(Path("dashboard/data"), _git_state()):
+        print(f"wrote {path}")
+    for path in export_fallbacks(Path("dashboard/data"), Path("docs/report"), Path("dashboard/fallback")):
+        print(f"wrote {path}")
+
+
 def cmd_measure_env(args: argparse.Namespace) -> None:
     """Environment numbers for the order-splitting game, measured on baseline runs (D-053)."""
     from tfs.core.config import expand_sweep
@@ -261,6 +272,9 @@ def main() -> None:
 
     common(e5p := sub.add_parser("e5", help="E5 whale manipulation study (descriptive)"))
     e5p.set_defaults(func=cmd_e5)
+
+    dd = sub.add_parser("dashboard-data", help="precompute dashboard data and PNG fallbacks")
+    dd.set_defaults(func=cmd_dashboard_data)
 
     me = sub.add_parser("measure-env", help="environment numbers for the order-splitting game (D-053)")
     me.add_argument("--seeds", type=int, default=50)

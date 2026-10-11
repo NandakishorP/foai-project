@@ -7,7 +7,7 @@ ANVIL := $(FOUNDRY_BIN)/anvil
 CAST  := $(FOUNDRY_BIN)/cast
 PY    := .venv/bin/python
 
-.PHONY: help foundry foundry-version test e1 season contracts contract-test difftest circuit-test
+.PHONY: help setup foundry foundry-version test e1 season contracts contract-test difftest circuit-test dashboard dashboard-data
 
 help:
 	@echo "make foundry          install stable Foundry into .tools/foundry (project-local)"
@@ -15,7 +15,10 @@ help:
 	@echo "make test             run the Python test suite"
 	@echo "make e1 | season      run experiment E1 / the season baseline"
 	@echo "make contract-test    forge unit + invariant tests (project-local Foundry)"
-	@echo "make difftest         FastEngine vs EvmEngine on all three scenarios (writes results/difftest/report.txt)"
+	@echo "make difftest         FastEngine vs EvmEngine on all scenarios (writes results/difftest/report.txt)"
+	@echo "make setup            create .venv and install the package with dev, evm and dashboard extras (uv)"
+	@echo "make dashboard        open the review-day dashboard (offline; precomputed results)"
+	@echo "make dashboard-data   rebuild the dashboard's data and PNG fallbacks (deterministic)"
 
 foundry:
 	./scripts/install_foundry.sh
@@ -45,3 +48,13 @@ difftest:
 
 circuit-test:
 	cd circuits/sealed_order && nargo test
+
+setup:
+	uv venv --python 3.12 .venv
+	uv pip install --python $(PY) -e ".[dev,evm,dashboard]"
+
+dashboard:
+	$(PY) -m streamlit run dashboard/app.py
+
+dashboard-data:
+	$(PY) -m tfs dashboard-data

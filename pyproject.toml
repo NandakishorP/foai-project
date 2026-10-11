@@ -18,6 +18,9 @@ dependencies = [
 evm = [
     "web3>=7,<8",  # EvmEngine: talks to Anvil (Phase 2b, DECISIONS D-042)
 ]
+dashboard = [
+    "streamlit>=1.40,<2",  # review-day dashboard (SPEC §9, DECISIONS D-062); reads precomputed results only
+]
 dev = [
     "pytest>=8.0",
     "hypothesis>=6.100",  # property-based tests for LMSR invariants

@@ -234,6 +234,7 @@ class BlockTrace:
     receipts: list[Receipt]
     price_before: float
     price_after: float
+    decisions: dict[str, object] = field(default_factory=dict)  # predator id -> its best front-run (a Decision), or None
 
 
 @dataclass
@@ -367,6 +368,7 @@ def run_market(
         requests: list[FrontRunRequest] = []
         late: list[Tx] = []
         visible_ids: dict[str, set[int]] = {}
+        decisions: dict[str, object] = {}
         for predator in predators:
             if desk is not None and isinstance(predator, MetadataPredator):
                 # sealed batches: it sees commit metadata, never contents; its orders join the batch
@@ -381,6 +383,7 @@ def run_market(
             predator.perceive(observation(predator, visible))
             late.extend(predator.act())
             request = predator.front_run_request()
+            decisions[predator.agent_id] = predator.last_decision  # kept only for replays (trace)
             if request is not None:
                 requests.append(request)
 
@@ -406,7 +409,8 @@ def run_market(
 
         after = engine.prices()
         if trace is not None:
-            trace.append(BlockTrace(tick, pending, visible_ids, plan, receipts, prices[Venue.MAIN], after[Venue.MAIN]))
+            trace.append(BlockTrace(tick, pending, visible_ids, plan, receipts, prices[Venue.MAIN], after[Venue.MAIN],
+                                    decisions))
         price_main[tick], price_ref[tick] = after[Venue.MAIN], after[Venue.REF]
 
     if desk is not None:

@@ -1022,6 +1022,25 @@ H3c contradicted on its "compounds beyond 3K" branch. ΔT is not monotone in K. 
 
 ---
 
+## D-062 — Owner decisions: X-5 framing, dashboard plan; streamlit dependency
+**Date:** 2026-10-11 · Owner.
+1. **X-5 framing in the report:** TWAP's edge is a population effect, the gap between a single agent's best response and the multi-agent outcome. "Does TWAP pay off for a single deviator?" is untested future work (E7 tournament).
+2. **Dashboard plan approved** (offline; precomputed results; only the search tree computes live). Views:
+   1. front-run replay;
+   2. PUBLIC vs ZK side by side;
+   3. expectiminimax tree with pruned branches and node counts;
+   4. shocks and stability;
+   5. verdicts.
+
+   Additions:
+   - a landing page walking the four acts in demo order;
+   - PNG fallbacks of each view's key figure in `dashboard/fallback/`;
+   - `make dashboard`, setup documented in the README, and a fresh-install run tested from a clean clone.
+3. **New dependency:** `streamlit`, in an optional `dashboard` extra. Reason: the SPEC's dashboard (§9), and CLAUDE.md names `streamlit run dashboard/app.py`. Charts reuse matplotlib; nothing else is added.
+4. **Order:** build the dashboard while the owner reviews report sections 4–6. Sections 1, 7 and 9 are drafted after that review.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3; implemented in Phase 3b as D-053.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

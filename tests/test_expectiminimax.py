@@ -1,13 +1,19 @@
 """Expectiminimax: a hand-solved tree, and pruned == plain on random games with transpositions."""
 
 import itertools
+from pathlib import Path
 import random
 import zlib
 from dataclasses import dataclass
 
 import pytest
 
+from tfs.core.config import load_config
 from tfs.search.expectiminimax import PLAIN, Node, Options, Searcher, Stats, expectiminimax
+from tfs.search.examples import TreeGame
+from tfs.search.order_splitting import OrderSplittingGame, split_params
+
+PARAMS_FOR_TREE = split_params(load_config(Path("sim/experiments/configs/base.yaml")))
 
 # --------------------------------------------------------------------------- #
 # A tree small enough to solve by hand
@@ -157,40 +163,8 @@ def test_pruning_saves_nodes_on_deeper_games() -> None:
 # --------------------------------------------------------------------------- #
 # The worked examples of docs/report/walkthroughs/search.md
 # --------------------------------------------------------------------------- #
-# Example 1 (alpha-beta at a MIN node): MAX picks A or B, then MIN picks a leaf.
-#   A -> MIN{3, 5} = 3.  B -> MIN{2, 9}: after seeing 2 (< the 3 MAX already has), B can
-#   never be chosen, so the 9 is never looked at.
-# Example 2 (Star1 at a CHANCE node): MAX picks A (worth 3, as above) or C. C is a coin
-#   flip (0.5 / 0.5) between two leaves, each worth between 0 and 4. The first leaf is worth 1.
-#   Even if the second were the best possible 4, C would be worth 0.5*1 + 0.5*4 = 2.5 < 3,
-#   so the second leaf is never looked at.
-WALK = {
-    "root": ("max", {"A": (0, "mA"), "B": (0, "mB")}),
-    "mA": ("min", {"a1": (3, "end"), "a2": (5, "end")}),
-    "mB": ("min", {"b1": (2, "end"), "b2": (9, "end")}),
-    "root2": ("max", {"A": (0, "mA"), "C": (0, "coin")}),
-    "coin": ("chance", [(0.5, "m1"), (0.5, "m4")]),
-    "m1": ("min", {"x": (1, "end")}),
-    "m4": ("min", {"x": (4, "end")}),
-    "end": ("terminal", None),
-}
-
-
-class WalkGame(ToyGame):
-    def node(self, s):
-        return Node(WALK[s][0])
-
-    def actions(self, s, ordered):
-        return list(WALK[s][1])
-
-    def result(self, s, a):
-        return WALK[s][1][a]
-
-    def outcomes(self, s):
-        return WALK[s][1]
-
-    def bounds(self, s):
-        return (0.0, 4.0) if s in ("coin", "m1", "m4") else (0.0, 9.0)
+# The trees live in tfs.search.examples, shared with the dashboard.
+WalkGame = TreeGame
 
 
 def test_walkthrough_example_1_alpha_beta_skips_a_leaf() -> None:
@@ -207,3 +181,26 @@ def test_walkthrough_example_2_star1_cuts_a_chance_node() -> None:
     assert no_star1.best_action("root2", 1) == star1.best_action("root2", 1) == ("A", 3)
     # without Star1 both coin outcomes are searched (m1, end, m4, end); with Star1, m4 and its leaf are skipped
     assert no_star1.stats.nodes - star1.stats.nodes == 2
+
+
+# --------------------------------------------------------------------------- the dashboard's tree view
+
+
+def test_explained_tree_matches_the_plain_tree_and_marks_the_pruned_leaf() -> None:
+    from tfs.search.tree import explain
+
+    ex = explain(WalkGame(), "root", 1, Options(star1=False, ordering=False, transposition=False))
+    assert len(ex.nodes) == ex.plain.nodes == 7  # the plain tree, node for node
+    pruned = [n.path for n in ex.nodes if n.status == "pruned"]
+    assert pruned == [("B", "b2")]  # example 1: the 9 is never looked at
+    assert ex.best_action == "A" and ex.value == 3
+
+
+def test_explained_tree_on_the_real_game_is_consistent() -> None:
+    from tfs.search.tree import explain
+
+    for game, root in [(OrderSplittingGame(PARAMS_FOR_TREE), OrderSplittingGame(PARAMS_FOR_TREE).root(0.9, 0.2, 60.0))]:
+        ex = explain(game, root, 1)
+        visited = sum(n.status != "pruned" for n in ex.nodes)
+        assert visited == ex.pruned.nodes  # every node the pruned search counted is in the tree
+        assert len(ex.nodes) == ex.plain.nodes
