@@ -13,7 +13,7 @@ Requirements: macOS or Linux, [uv](https://docs.astral.sh/uv/), and Python 3.12 
 
 ```bash
 make setup          # creates .venv and installs the package with dev, evm and dashboard extras
-make test           # Python test suite (about 1 minute)
+make test           # Python test suite (about 1.5 minutes)
 ```
 
 Optional, only for the Solidity contracts and the zero-knowledge circuit:

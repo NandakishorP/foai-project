@@ -1039,6 +1039,13 @@ H3c contradicted on its "compounds beyond 3K" branch. ΔT is not monotone in K. 
 3. **New dependency:** `streamlit`, in an optional `dashboard` extra. Reason: the SPEC's dashboard (§9), and CLAUDE.md names `streamlit run dashboard/app.py`. Charts reuse matplotlib; nothing else is added.
 4. **Order:** build the dashboard while the owner reviews report sections 4–6. Sections 1, 7 and 9 are drafted after that review.
 
+**Built and tested** (2026-10-11): code `1c34a5a`; data and fallbacks built from that clean tree (`74f2fb3`).
+- **Fresh-clone test:**
+  - `git clone` → `make setup` → `pytest -q`: 837 passed, 8 skipped (EVM/ZK need `.tools/`, as documented);
+  - `make dashboard-data` reproduces the committed data exactly, apart from the provenance stamp;
+  - `make dashboard` serves (health check ok).
+- **Dashboard tests:** every page renders without errors, including each shock scenario and the real-game trees at depths 1 and 2. Block 23 of the replay is the archived Phase 2a front-run.
+
 ---
 
 ## Open questions
