@@ -998,6 +998,30 @@ H3c contradicted on its "compounds beyond 3K" branch. ΔT is not monotone in K. 
 
 ---
 
+## D-061 — X-5 results (EXPLORATORY; completed about 7 h past its time box; included by owner decision)
+**Date:** 2026-10-11 · Run from the clean tree `106d419`, with the spec and seeds of the committed `x5.yaml`.
+- **Timing.** The first attempt (14 workers) was killed when the Claude session ended. It was restarted unchanged with 8 workers, which give byte-identical results. It finished at 09:29 against a 02:30 time box: about 7 hours over.
+  - The machine stayed awake (a sleep assertion held throughout).
+  - The overrun came from the cost estimate, which scaled a 6-market timing linearly to 30 markets.
+- **Owner decision:** include X-5 regardless of outcome, labelled EXPLORATORY and "completed about 7 h past its time box".
+- **Archive:** `docs/report/exploratory/x5/` (`analysis.txt`, `results/`).
+
+**Results** (E4 setting, 200 paired seeds, markets 6–30):
+
+| rule | P, 1 predator, / TWAP | P, 0 predators, / TWAP | leakage | researcher reverts |
+|---|---|---|---|---|
+| capped | 0.918 [0.907, 0.928] | 0.968 | 0.130 | 0.61 |
+| search (E4-V, depth 2) | 0.906 [0.895, 0.916] | 0.970 | 0.143 | 0.50 |
+| **crowd-aware search, depth 2** | **0.917 [0.907, 0.927]** | 0.970 | **0.132** | 0.48 |
+| crowd-aware search, depth 1 | 0.913 [0.902, 0.923] | 0.970 | 0.137 | 0.49 |
+| TWAP | 1 | 1 | 0.083 | 0.20 |
+
+- **Adding the crowd to the model helps a little:** +0.011 over the plain search at the same depth, with leakage back to the capped level. It closes about a tenth of the gap to TWAP.
+- **Single deviator:** forecaster 0 searching alone with the crowd model earns +0.12 [−0.17, +0.41] per market over the capped rule. No detectable individual gain.
+- **Interpretation (not a test).** TWAP's advantage looks like a *population* effect: when everyone sends small slices, the crowd ahead shrinks for everyone. A best response to the crowd *as observed* (measured under the capped rule) cannot find that. Whether TWAP pays for a single deviator was not tested.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3; implemented in Phase 3b as D-053.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

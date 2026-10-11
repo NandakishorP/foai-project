@@ -69,6 +69,7 @@ Follow-up (Phase 4): predator variants r ∈ {0, 0.5, 1} enter the E7 tournament
 - **The hybrid clearing rule is untested future work** (owner, D-058): limit check at the marginal price, average-price charging, pro-rata rebate.
 - **Shock scenarios force a shock's status.** Forced-false and forced-true scenarios condition on the event, so the truth-lost decomposition is not claimed for them.
 - **Trend followers are small** (2 traders × 2 shares per tick). "Barely amplify" holds for that size.
+- **X-5 finished about 7 hours past its time box** (D-061). It was killed once by a session ending, then restarted unchanged with fewer workers (byte-identical). Its depth (2) was set from runtime before any run. It is included by owner decision and labelled EXPLORATORY.
 - **E5's persistence result depends on capital.** The distortion outlasting the whale comes from researchers reaching their Kelly limits under fixed bankrolls (D-015) and quarter-Kelly sizing.
 - **E5's whale is an adversarial worst case** (owner, D-059): the scenario points it against the outcome; it is not a model of typical whales. The share of its window in which its target was really on the wrong side of p*_avail is reported, so manipulation is verified rather than assumed.
 
