@@ -968,6 +968,36 @@ H3c contradicted on its "compounds beyond 3K" branch. ΔT is not monotone in K. 
 
 ---
 
+## D-060 — E5 results: the cost of manipulation (descriptive; adversarial worst case)
+**Date:** 2026-10-11 · Run from the clean tree `7f1b903`. Archive: `docs/report/phase3b/e5/` (`e5.csv`, `e5_paired.csv`, `e5_deviation.png`). 200 paired seeds.
+
+- **Manipulation verified, not assumed.** The whale's target was on the wrong side of p*_avail in 94.5% of its window ticks. In the other 5.5%, the available information itself favoured the wrong outcome.
+- **Price distortion grows with the budget.** Paired against the budget-0 twin, no arbitrageur:
+
+| budget | deviation × duration (Σ\|p − p*\| over 100 ticks) | extra ticks off by ≥ ε | whale PnL |
+|---|---|---|---|
+| 50 | +2.8 [2.4, 3.1] | +30 [25, 34] | −39 |
+| 200 | +11.2 [10.2, 12.2] | +72 [68, 77] | −171 |
+| 800 | +39.7 [37.3, 42.2] | +87 [85, 90] | −648 |
+
+  The whale loses about 80% of its budget.
+- **Who collects the whale's loss** (budget 800, arbitrageur on):
+  - researchers +526 (about 80%);
+  - public-news trader +54;
+  - main market maker +55;
+  - arbitrageur +22 and reference market maker +16;
+  - trend followers *lose* 18: they chase the whale's push.
+
+  Without the arbitrageur the researchers collect slightly more (+559).
+- **The arbitrageur reduces the distortion only a little** (+36.8 vs +39.7 at budget 800). It imports the reference venue's public-news-only price, which is less informed.
+- **The distortion outlasts the whale.** After the whale stops, |price − p*_avail| levels off at about 0.04, 0.12 and 0.39 (budgets 50, 200, 800) until the market ends. The "correction time" is censored in most runs: the price is not back within ε by the end.
+  - **Mechanism, checked:** after the whale, researchers trade less (23 shares in the last 50 ticks vs 166 with no whale), and already hold 1.56× their combined Kelly target (1.23× without a whale).
+  - Informed capital is at its Kelly limit, so nobody pushes the price back: the limits of arbitrage (Shleifer & Vishny 1997, cited for the mechanism).
+  - This depends on the fixed per-market bankrolls (D-015) and quarter-Kelly sizing. More informed capital would correct further.
+- **Labelled in the report as an adversarial worst case** (owner, D-059), not a model of typical whales.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3; implemented in Phase 3b as D-053.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

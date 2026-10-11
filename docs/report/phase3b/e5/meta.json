@@ -1,0 +1,21 @@
+{
+  "git": {
+    "commit": "7f1b9036faf07e30882d718dee9b24b6f85e2d2c",
+    "dirty": false
+  },
+  "seeds": [
+    0,
+    199
+  ],
+  "points": [
+    "agents.whale.budget=0|agents.arbitrageurs.count=0|baseline",
+    "agents.whale.budget=0|agents.arbitrageurs.count=1|baseline",
+    "agents.whale.budget=50|agents.arbitrageurs.count=0|baseline",
+    "agents.whale.budget=50|agents.arbitrageurs.count=1|baseline",
+    "agents.whale.budget=200|agents.arbitrageurs.count=0|baseline",
+    "agents.whale.budget=200|agents.arbitrageurs.count=1|baseline",
+    "agents.whale.budget=800|agents.arbitrageurs.count=0|baseline",
+    "agents.whale.budget=800|agents.arbitrageurs.count=1|baseline"
+  ],
+  "after": 60
+}

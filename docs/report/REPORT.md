@@ -134,7 +134,14 @@ The plots show the price moving in K = 5-block steps and lagging p*_full by abou
 
 (In these runs p*_avail equals p*_full, because ρ = 1 and everyone researches. The two lines coincide in the plots.)
 
-### 6.4 Synthesis
+### 6.4 Manipulation: a whale backing the wrong outcome (E5; adversarial worst case)
+A whale holds the price of the outcome that will happen at 0.30 from tick 100 until its budget runs out. This is a worst case by construction, like the forced-false shock, not a model of typical whales. Its target was really on the wrong side of the best available estimate in 94.5% of its window.
+
+- **Cost and distortion grow with the budget.** Budgets of 50, 200 and 800 lose 39, 171 and 648 (about 80%). Extra deviation × duration is +2.8, +11.2 and +39.7 probability-ticks.
+- **Informed traders collect most of the loss** (about 80%; budget 800: +526). The public-news trader, the market makers and the arbitrageur take the rest. Trend followers lose by chasing the whale.
+- **The distortion outlasts the whale.** After a large whale stops, the price stays about 0.39 away from the ideal posterior until the market ends. Researchers already hold more than their Kelly targets, so nobody has the capital or the incentive to push it back: the limits of arbitrage. This depends on the model's fixed bankrolls and quarter-Kelly sizing.
+
+### 6.5 Synthesis
 See `docs/report/synthesis.md`: across F-002, H3b and H4, the main adversary of an informed agent is the other informed agents sharing its signal, not the predator.
 
 ## 7. Phase 4 — Real-world calibration, tournament, dashboard
