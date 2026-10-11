@@ -1,0 +1,19 @@
+{
+  "git": {
+    "commit": "106d419f2d8cd53aa7f14d47f820ef33f8f523b8",
+    "dirty": false
+  },
+  "seeds": [
+    0,
+    199
+  ],
+  "points": [
+    "information.shocks=[{'tick': 100, 'nats': 1.0, 'status': 'true'}]|agents.trend.count=0|baseline",
+    "information.shocks=[{'tick': 100, 'nats': 1.0, 'status': 'true'}]|agents.trend.count=2|baseline",
+    "information.shocks=[{'tick': 100, 'nats': 3.0, 'status': 'true'}]|agents.trend.count=0|baseline",
+    "information.shocks=[{'tick': 100, 'nats': 3.0, 'status': 'true'}]|agents.trend.count=2|baseline"
+  ],
+  "config": "sim/experiments/configs/shock_t.yaml",
+  "window": 40,
+  "pre": 20
+}

@@ -101,9 +101,26 @@ Four switchable speed-ups (`Options`, line 87), so the benchmark can show what e
 3. So "?" is never examined. Star1 saves 2 nodes here. Plain alpha-beta could not cut, because it does not use the bound 4.
 
 ## 6. Measured on the real game (E4-search, `docs/report/phase3b/e4_search/`)
-*(Filled from `search_bench.csv`: nodes and milliseconds per decision at depths 1–5, plain vs each speed-up, on 500 states the forecasters actually searched. Every pruned value equals the plain value.)*
+500 game states that the forecasters actually searched in E4 seasons, each searched from scratch. Plain expectiminimax at depth 5 ran on the first 50 states only (about 1.9M nodes each). Every pruned value equals the plain value (largest difference 2.2e-16, rounding).
 
-During a 30-market season at depth 3, the forecasters' search solved about 5,700 distinct root states and expanded about 1.5M nodes; 17% of node visits were answered by the transposition table. A season took 7.4 s, against 1.7 s for the capped rule.
+| depth | plain | alpha-beta | + Star1 | + ordering | + transposition table |
+|---|---|---|---|---|---|
+| 1 | 42 nodes · 0.12 ms | 41 · 0.10 | 39 · 0.12 | 30 · 0.09 | 30 · 0.10 |
+| 2 | 639 · 1.5 ms | 620 · 1.4 | 587 · 1.7 | 383 · 1.2 | 360 · 1.1 |
+| 3 | 7,660 · 17 ms | 7,388 · 17 | 7,057 · 20 | 3,911 · 12 | **1,486 · 4.6 ms** |
+| 4 | 89,862 · 197 ms | 86,425 · 195 | 82,348 · 236 | 39,045 · 115 | **3,469 · 10.5 ms** |
+| 5 | 1,873,458 · 5.6 s | 999,901 · 2.3 s | 947,857 · 2.7 s | 382,880 · 1.1 s | **6,332 · 20 ms** |
+
+How to read it, honestly:
+- **Alpha-beta alone saves little here:** 4% at depth 4. At depth 5 the plain figure comes from a 50-state subsample, so the two are not directly comparable.
+  - Cut-offs need a MIN node with several real choices. In this game the predator usually has only one *allowed* front-run, because front-running a small slice is rarely profitable, so most MIN nodes have one child.
+  - Every chance layer also resets the window for plain alpha-beta.
+- **Star1 removes a few more nodes but is *slower*.** Computing every child's bounds at every chance node costs more than the nodes it saves. A real trade-off, worth stating rather than hiding.
+- **Move ordering roughly halves the tree.** Trying the most damaging front-run first makes the MIN cut-offs come earlier.
+- **The transposition table is the big win:** 26× fewer nodes than plain at depth 4 (same 500 states), and 60× fewer than ordering alone at depth 5 (382,880 → 6,332, same states). Because states live on a grid, many paths (slice, front-run, noise outcome) lead to the same state, which is then searched once. The table is what makes depth 4–5 affordable.
+- **Growth with depth:** the full search grows about 2× per extra block, where plain grows about 12–20×.
+
+In a full 30-market season at depth 3 (one table kept for the season), the forecasters solved about 5,700 distinct root states and expanded about 1.5M nodes; 17% of node visits were answered by the table. A season took 7.4 s, against 1.7 s for the capped rule.
 
 ## 7. What it achieved, and why it lost (E4; D-055)
 - **The algorithm is correct and efficient** (section 6, and the tests in section 3).
@@ -124,3 +141,6 @@ During a 30-market season at depth 3, the forecasters' search solved about 5,700
 10. **Why did it lose to TWAP if the search is correct?** The search is correct for its game, but the game leaves out the crowd of identical researchers, which is the main force. See section 7 and `docs/report/synthesis.md`. The exploratory X-5 adds the crowd to the model.
 11. **Is the run deterministic?** Yes. Same seed, same result (`tests/test_slicing.py`). Ties keep the earlier action. The random rule has its own random stream.
 12. **How much does it cost?** About 4× the capped rule's run time per season at depth 3. See section 6 for per-decision numbers.
+13. **Your alpha-beta saves only 4% at depth 4. Is it implemented correctly?** Yes: it gives exactly the plain value, and on the hand example and on random games with many MIN choices it prunes as expected (tests). Here the predator usually has a single allowed action, so there is little to cut.
+14. **Why keep Star1 if it is slower?** It is correct and saves nodes. Whether that pays depends on how expensive a node is versus a bound. Here bounds are relatively costly. It is reported, not tuned away.
+15. **Which technique matters most here, and why?** The transposition table, because the grid makes many move sequences reach the same state.

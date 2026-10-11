@@ -1,0 +1,23 @@
+{
+  "git": {
+    "commit": "106d419f2d8cd53aa7f14d47f820ef33f8f523b8",
+    "dirty": false
+  },
+  "seeds": [
+    0,
+    199
+  ],
+  "points": [
+    "agents.trend.count=0|baseline",
+    "agents.trend.count=0|market.depeg.noise_withdrawal=0.5",
+    "agents.trend.count=0|market.depeg.noise_withdrawal=1.0",
+    "agents.trend.count=0|market.depeg.discount=0.0",
+    "agents.trend.count=2|baseline",
+    "agents.trend.count=2|market.depeg.noise_withdrawal=0.5",
+    "agents.trend.count=2|market.depeg.noise_withdrawal=1.0",
+    "agents.trend.count=2|market.depeg.discount=0.0"
+  ],
+  "config": "sim/experiments/configs/shock_d.yaml",
+  "window": 40,
+  "pre": 20
+}

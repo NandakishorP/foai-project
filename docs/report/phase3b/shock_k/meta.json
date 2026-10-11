@@ -1,0 +1,18 @@
+{
+  "git": {
+    "commit": "106d419f2d8cd53aa7f14d47f820ef33f8f523b8",
+    "dirty": false
+  },
+  "seeds": [
+    0,
+    199
+  ],
+  "points": [
+    "mempool.policy=public|baseline",
+    "mempool.policy=commit_reveal|baseline",
+    "mempool.policy=zk_batch|baseline"
+  ],
+  "config": "sim/experiments/configs/shock_k.yaml",
+  "window": 40,
+  "pre": 20
+}

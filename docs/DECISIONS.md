@@ -910,6 +910,64 @@ H3c contradicted on its "compounds beyond 3K" branch. ΔT is not monotone in K. 
 
 ---
 
+## D-058 — X-4 results (EXPLORATORY); owner framing of the defense; E4-search and shock results recorded
+**Date:** 2026-10-10. X-4, E4-search and the shock runs all ran from the clean tree `106d419`. Archives: `docs/report/exploratory/x4/`, `docs/report/phase3b/e4_search/`, `docs/report/phase3b/shock_*`.
+
+**X-4 (marginal batch clearing), against the pre-registered average rule on the same seeds:**
+- ZK truth-lost RMS: −15.2% [−15.6, −14.7] without a predator, −13.8% [−14.2, −13.3] with one. Still about 2.7× PUBLIC.
+- The remaining error is mostly a *lag*. Price minus p*_avail, signed towards the truth: −0.031; the sign flips 0.04 times per tick. The price moves once per 5-block batch, and each researcher sends one capped order per batch.
+- The informed rent moves to the market maker:
+  - LMSR surplus 47–50 per market;
+  - researcher PnL falls from 5.0 to 1.2 per researcher-market;
+  - the predator loses money.
+- Commit-reveal with marginal clearing: RMS +145% vs PUBLIC; same rent transfer.
+
+**Refinement of D-051** (descriptive, disclosed). At K = 5 the average rule's error flips sign only 0.05 times per tick (20 seeds): much of it is lag, not only cycling around the belief. The cycling is stark at K = 1. D-051's general description at K = 5 should read "overshoots and lags".
+
+**Owner framing for the report (Act 3 conclusion): trust vs accuracy.** Hiding orders from the predator works two ways:
+- **By trust** (PRIVATE_RELAY): accurate, and the predator earns nothing, but users must trust the relay.
+- **By cryptography** (ZK_BATCH): trustless, but batching imposes lag. The clearing rule only decides whether the price overshoots (average) or the market maker takes the rent (marginal).
+- **Untested future work** (no run): a hybrid rule. Check limits at the marginal price (no overshoot), charge the average price, and rebate the surplus pro rata. It might avoid both the overshoot and the rent loss, but not the lag.
+
+**E4-search (descriptive):** 500 states from E4 seasons; every pruned value equals plain expectiminimax (≤ 2.2e-16). Nodes per decision at depth 4:
+
+| plain | alpha-beta | + Star1 | + ordering | + transposition table |
+|---|---|---|---|---|
+| 89,862 | 86,425 | 82,348 | 39,045 | 3,469 (197 → 10.5 ms) |
+
+- Alpha-beta alone saves little: the predator usually has a single allowed front-run.
+- Star1 cuts nodes but costs time.
+- The transposition table dominates, because grid states recur.
+
+**Shock scenarios (descriptive):**
+- **True news:** absorbed in about 7–8 ticks.
+- **False news:** the correction is the most stressed moment (max deviation 0.20–0.29).
+- **Trend followers:** they trade with every move (+3 to +46 shares) but barely amplify it (overshoot ≤ +0.007; recovery often 1–2 ticks faster).
+- **Depeg:** arbitrage withdraws (venue gap 0.12 → 0.26, volume −30%); main accuracy is unchanged.
+- **Batching after news:** recovery doubles (6.9 → 13.5 ZK, 14.7 commit-reveal).
+
+---
+
+## D-059 — E5 design: what is measured (fixed before the run; descriptive, no hypothesis)
+**Date:** 2026-10-10 · Owner approval (time-boxed). Code on branch `e5-whale` (`769ff89`, `67dc5b6`, `27b653f`), config `e5.yaml`.
+
+- **Whale:** from tick 100 to 140 it buys to hold the price of the outcome that will happen at 0.30, until its budget is spent.
+  - It never observes the outcome; the scenario picks its side, as a forced-false shock does.
+  - A whale pushing *toward* the truth would just be a lucky trader, not manipulation (found in a smoke run: +158 profit).
+  - **The report labels this scenario an adversarial worst case** (owner), like the forced-false shock, not a model of typical whales.
+- **Setting:** the reference setting (one 200-tick market, research forced, no predator, PUBLIC), but with **no news shock**, so the whale is the only event. 200 seeds.
+- **Sweep:** whale budget {50, 200, 800} × arbitrageur {off, on}. Each point is paired with its budget-0 twin (same arbitrageurs). A budget-0 whale is tested to leave the market bit-identical to no whale.
+- **Measured over [100, 200):**
+  - **target on the wrong side** (owner): the share of the window in which the whale's target lies further from the true outcome than p*_avail. This verifies manipulation rather than assuming it; when the available information itself favours the wrong outcome, the whale is not pushing against it;
+  - deviation × duration: Σ |price − p*_avail|, as the excess over the twin;
+  - max deviation;
+  - ticks off by ≥ ε;
+  - **correction time:** ticks from the whale's last trade until the price is back within ε of p*_avail for good;
+  - the whale's PnL;
+  - **who collects the loss:** paired PnL differences by agent kind (forecasters, public-news trader, noise, arbitrageur, trend) and the two market makers.
+
+---
+
 ## Open questions
 
 - **Q1 — RESOLVED 2026-10-10: false news stays off until Phase 3; implemented in Phase 3b as D-053.** Original question: False news vs the MSE decomposition (D-001). SPEC §2 allows *false* breaking news (a signal pointing the wrong way, later corrected). If the ideal prices treat a false shock as a genuine high-precision signal, they are not using the true likelihood, and the cross term will not vanish. Proposed fix: make false news part of the generative model with a known probability `q_false`, so the ideal prices discount shocks accordingly. Agents may still over-react; that is a market failure and shows up as aggregation loss. Needs owner decision before Phase 1 implements shocks.

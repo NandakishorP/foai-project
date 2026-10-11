@@ -63,5 +63,13 @@ Follow-up (Phase 4): predator variants r ∈ {0, 0.5, 1} enter the E7 tournament
 - **E4-V chart crash after the data were written.** The charts were redrawn from the saved CSVs, with no rerun.
 - **Single-deviator readout computed after the runs** (`docs/report/phase3b/deviator/`; descriptive).
 
+## Phase 3b shocks, X-4 and E5
+- **D-051's description is refined** (D-058). At K = 5, much of the average rule's error is *lag* (the sign flips only 0.05 times per tick), not only the price cycling around the shared belief. The cycling is stark at K = 1. Verdicts are unchanged.
+- **X-4 is exploratory and FastEngine-only.** The Solidity auction keeps the pre-registered average rule. Marginal clearing moves most of the research rent to the market maker (about 47–50 per market).
+- **The hybrid clearing rule is untested future work** (owner, D-058): limit check at the marginal price, average-price charging, pro-rata rebate.
+- **Shock scenarios force a shock's status.** Forced-false and forced-true scenarios condition on the event, so the truth-lost decomposition is not claimed for them.
+- **Trend followers are small** (2 traders × 2 shares per tick). "Barely amplify" holds for that size.
+- **E5's whale is an adversarial worst case** (owner, D-059): the scenario points it against the outcome; it is not a model of typical whales. The share of its window in which its target was really on the wrong side of p*_avail is reported, so manipulation is verified rather than assumed.
+
 ## Exploratory analyses
 Everything under `docs/report/exploratory/` is exploratory. It was not pre-registered and never alters a verdict.

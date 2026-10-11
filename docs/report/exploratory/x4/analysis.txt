@@ -1,0 +1,20 @@
+Truth-lost RMS relative to PUBLIC without predators (same seeds), and the predator's take
+cell                                            RMS vs PUB0  unfilled   P/res  pred PnL surplus/mkt
+marginal public        pred=0         +0.000 [+0.000, +0.000]     0.528   5.931     0.000       0.000
+marginal public        pred=1         +0.034 [+0.032, +0.037]     0.605   5.160     5.760       0.000
+marginal commit_reveal pred=0         +1.447 [+1.429, +1.466]     0.462   1.219     0.000      50.131
+marginal commit_reveal pred=1         +1.454 [+1.436, +1.473]     0.460   1.256    -0.417      50.258
+marginal zk_batch      pred=0         +1.715 [+1.691, +1.740]     0.621   1.207     0.000      46.947
+marginal zk_batch      pred=1         +1.730 [+1.706, +1.756]     0.621   1.248    -0.936      47.423
+average  zk_batch      pred=0 (E3-F)  +2.201 [+2.170, +2.231]     0.573   5.014     0.000           0
+average  zk_batch      pred=1 (E3-F)  +2.166 [+2.135, +2.195]     0.576   4.995     1.119           0
+
+Leakage (share of the researchers' edge lost to the predator, vs each cell's own 0-predator twin)
+  marginal        public        L = +0.130 [+0.123, +0.138]
+  marginal        commit_reveal L = -0.030 [-0.054, -0.009]
+  marginal        zk_batch      L = -0.033 [-0.063, -0.008]
+  average (E3-F)  zk_batch      L = +0.004 [-0.008, +0.015]
+
+ZK accuracy, marginal vs average clearing (paired): RMS(marginal) / RMS(average) - 1
+  pred=0: -0.152 [-0.156, -0.147]
+  pred=1: -0.138 [-0.142, -0.133]
