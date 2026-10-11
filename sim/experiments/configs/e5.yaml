@@ -1,0 +1,16 @@
+# E5 (SPEC §7; descriptive; measures fixed in DECISIONS D-059 before the run): the cost of manipulation.
+# A whale backs the wrong outcome: from tick 100 to 140 it buys to hold the price of the outcome that will
+# happen at 0.30, until its budget is spent. Reference setting otherwise (one 200-tick market, research
+# forced, no predator, PUBLIC), except no news shock, so the whale is the only event.
+# Budget {50, 200, 800} x arbitrageur {off, on}; budget 0 is each point's paired no-whale twin.
+extends: base.yaml
+name: e5
+information:
+  shocks: []
+agents:
+  whale:
+    count: 1
+sweep:
+  crossed:
+    agents.whale.budget: [0, 50, 200, 800]
+    agents.arbitrageurs.count: [0, 1]

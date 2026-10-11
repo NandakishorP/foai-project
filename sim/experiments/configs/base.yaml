@@ -144,6 +144,16 @@ agents:
     size: 10.0            # a typical informed-sized order (forecaster max_order is 20)
     bankroll: 200.0       # as funded as a forecaster (capital_ratio 2 x b)
 
+  whale:                  # whale manipulator (E5, SPEC §6); off in the baseline
+    count: 0
+    budget: 200.0         # E5 sweeps {50, 200, 800}: from a quarter of one researcher's bankroll to 4x it
+    target: 0.30          # the price it defends
+    against_truth: true   # E5 scenario: it holds the price of the outcome that WILL happen down at 0.30 (a whale
+                          #   backing the losing side). The whale never sees the outcome; the scenario picks its side,
+                          #   as a forced-false shock does. A whale pushing toward the truth is just a lucky trader.
+    start: 100
+    end: 140              # 40 ticks: about the length of the shock windows
+
   trend:
     count: 2
     fast_span: 5          # classic fast/slow EMA crossover

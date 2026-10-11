@@ -28,6 +28,7 @@ from tfs.agents.predator import Predator, PredatorMemory, exposure_direction
 from tfs.agents.public_news import PublicNewsTrader
 from tfs.agents.slicing import make_slice_rule
 from tfs.agents.trend import TrendFollower
+from tfs.agents.whale import WhaleManipulator, yes_target as whale_yes_target
 from tfs.core.config import SimConfig
 from tfs.core.information import (
     ForecasterTraits,
@@ -59,6 +60,7 @@ def build_agents(
     researchers: frozenset[int],
     predator_memories: Sequence[PredatorMemory] = (),
     splitting: SplittingPolicy | None = None,
+    outcome: int | None = None,
 ) -> list[Agent]:
     """Create every agent trading in this market. Non-researching forecasters do not take part (D-014).
 
@@ -132,6 +134,11 @@ def build_agents(
                 f"trend_{j}", tc.fast_span, tc.slow_span, tc.threshold, tc.order_size, tc.max_position, tc.bankroll
             )
         )
+
+    wc = a.whale
+    for j in range(wc.count):
+        target = whale_yes_target(wc, outcome if outcome is not None else 1)
+        agents.append(WhaleManipulator(f"whale_{j}", b[Venue.MAIN], wc.budget, target, wc.start, wc.end, wc.budget))
 
     batched = MempoolPolicy(cfg.mempool.policy).batched
     memories = list(predator_memories) or [PredatorMemory() for _ in range(a.predators.count)]
@@ -284,7 +291,7 @@ def run_market(
     splitting: SplittingPolicy | None = None,
 ) -> MarketRecord:
     tape = generate_tape(cfg, rngs, market)
-    agents = build_agents(cfg, rngs, market, traits, researchers, predator_memories, splitting)
+    agents = build_agents(cfg, rngs, market, traits, researchers, predator_memories, splitting, tape.y)
     traders = [a for a in agents if not isinstance(a, Predator)]
     predators = [a for a in agents if isinstance(a, Predator)]
     engine = FastEngine(

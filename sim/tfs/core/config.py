@@ -192,6 +192,18 @@ class PredatorConfig:
 
 
 @dataclass(frozen=True)
+class WhaleConfig:
+    """Whale manipulator (E5): holds the main price at `target` from `start` to `end`, up to `budget` cash."""
+
+    count: int  # 0 or 1
+    budget: float  # most cash it spends in total (its bankroll)
+    target: float  # the YES price it defends (if against_truth: the price of the TRUE outcome it holds down)
+    against_truth: bool  # scenario: the whale backs the wrong outcome (E5); it never observes the outcome itself
+    start: int
+    end: int
+
+
+@dataclass(frozen=True)
 class AttackersConfig:
     """Sealed-batch attackers (E3-V, descriptive; D-046). All zero in the baseline."""
 
@@ -214,6 +226,7 @@ class AgentsConfig:
     trend: TrendConfig
     predators: PredatorConfig
     attackers: AttackersConfig
+    whale: WhaleConfig
 
 
 MempoolPolicyName = Literal["public", "private_relay", "commit_reveal", "zk_batch"]
@@ -279,6 +292,9 @@ def _validate(cfg: SimConfig) -> None:
         raise ConfigError("mempool.escrow_tiers must be a non-empty increasing list")
     if not 0.0 <= cfg.information.private.rho <= 1.0:
         raise ConfigError("information.private.rho must be in [0, 1]")
+    whale = cfg.agents.whale
+    if whale.count and not (0 <= whale.start < whale.end <= cfg.market.ticks and 0.0 < whale.target < 1.0):
+        raise ConfigError("agents.whale: window must lie inside the market and target in (0, 1)")
     if cfg.agents.trend.fast_span >= cfg.agents.trend.slow_span:
         raise ConfigError("agents.trend.fast_span must be shorter than slow_span")
 

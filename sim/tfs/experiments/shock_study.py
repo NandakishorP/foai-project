@@ -141,7 +141,8 @@ def short_label(label: str) -> str:
     label = re.sub(r"information\.shocks=\[\{'tick': \d+, 'nats': ([\d.]+), 'status': '\w+'\}\]", r"shock \1 nats", label)
     for long, short in (("agents.trend.count=", "trend "), ("information.q_false=", "q_false "),
                         ("market.depeg.noise_withdrawal=", "noise away "), ("market.depeg.discount=", "depeg δ "),
-                        ("mempool.policy=", ""), ("|baseline", "")):
+                        ("mempool.policy=", ""), ("agents.whale.budget=", "whale budget "),
+                        ("agents.arbitrageurs.count=", "arbs "), ("|baseline", "")):
         label = label.replace(long, short)
     return label.replace("|", " | ")
 
